@@ -1,0 +1,11 @@
+{
+  "name": "cresa.one",
+  "description": "Publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or store agent files in private Drives.",
+  "version": "0.1.1",
+  "author": { "name": "cresa.one" },
+  "homepage": "https://cresa.one",
+  "repository": "https://github.com/cresadotone/skill",
+  "license": "MIT",
+  "keywords": ["cresa.one", "cresaone", "publish", "static-hosting", "deploy", "share", "drive", "storage"],
+  "logo": "assets/logo.svg"
+}

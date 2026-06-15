@@ -35,3 +35,5 @@ Full documentation: **https://cresa.one/docs**
 ## License
 
 MIT
+
+<!-- sync-test: 2026-06-15T09:53:15Z -->

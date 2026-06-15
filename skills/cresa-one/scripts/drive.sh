@@ -216,8 +216,11 @@ put_file() {
     body=$(echo "$body" | "$JQ_BIN" '.ifNoneMatch = "*"')
   fi
   upload=$(api_json POST "$BASE_URL/api/v1/drives/$id/files/uploads" "$body")
-  upload_url=$(echo "$upload" | "$JQ_BIN" -r '.uploadUrl')
-  upload_id=$(echo "$upload" | "$JQ_BIN" -r '.uploadId')
+  upload_url=$(echo "$upload" | "$JQ_BIN" -r '.url // .uploadUrl // empty')
+  upload_id=$(echo "$upload" | "$JQ_BIN" -r '.uploadId // empty')
+  if [[ -z "$upload_url" || -z "$upload_id" ]]; then
+    die "upload staging response missing url/uploadId. Raw response: $upload"
+  fi
   http_code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT "$upload_url" -H "Content-Type: $ct" --data-binary "@$local_file")
   [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]] || die "upload failed for $path (HTTP $http_code)"
   api_json POST "$BASE_URL/api/v1/drives/$id/files/finalize" "$("$JQ_BIN" -n --arg u "$upload_id" '{uploadId:$u}')" | "$JQ_BIN" .

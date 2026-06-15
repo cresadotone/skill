@@ -221,9 +221,22 @@ put_file() {
   if [[ -z "$upload_url" || -z "$upload_id" ]]; then
     die "upload staging response missing url/uploadId. Raw response: $upload"
   fi
-  http_code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT "$upload_url" -H "Content-Type: $ct" --data-binary "@$local_file")
+  # Forward any headers the staging response specifies for the PUT (e.g. Content-Type).
+  local -a put_headers=()
+  while IFS= read -r h; do
+    [[ -n "$h" ]] && put_headers+=(-H "$h")
+  done < <(echo "$upload" | "$JQ_BIN" -r '(.headers // {}) | to_entries[] | "\(.key): \(.value)"')
+  # Fall back to the guessed content type if the API returned no headers.
+  [[ ${#put_headers[@]} -eq 0 ]] && put_headers=(-H "Content-Type: $ct")
+  http_code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT "$upload_url" "${put_headers[@]}" --data-binary "@$local_file")
   [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]] || die "upload failed for $path (HTTP $http_code)"
-  api_json POST "$BASE_URL/api/v1/drives/$id/files/finalize" "$("$JQ_BIN" -n --arg u "$upload_id" '{uploadId:$u}')" | "$JQ_BIN" .
+  local final remote_size
+  final=$(api_json POST "$BASE_URL/api/v1/drives/$id/files/finalize" "$("$JQ_BIN" -n --arg u "$upload_id" '{uploadId:$u}')")
+  remote_size=$(echo "$final" | "$JQ_BIN" -r '.files[0].size // empty')
+  if [[ -n "$remote_size" && "$remote_size" != "$sz" ]]; then
+    die "integrity check failed for $path: uploaded $sz bytes but server recorded $remote_size"
+  fi
+  echo "$final" | "$JQ_BIN" .
 }
 
 case "$CMD" in

@@ -32,6 +32,10 @@ hermes skills install well-known:https://cresa.one/.well-known/skills/cresa.one
 
 Full documentation: **https://cresa.one/docs**
 
+## Source
+
+This public skill bundle is synced from the private cresa.one product repo. Make changes in the private repo under `skill/`; the public `cresadotone/skill` repo is the mirror used for installs.
+
 ## License
 
 MIT

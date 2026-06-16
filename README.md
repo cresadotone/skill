@@ -34,7 +34,11 @@ Full documentation: **https://cresa.one/docs**
 
 ## Site Metadata
 
-Use the skill's `publish.sh --metadata-only --slug {slug}` helper, or `PATCH /api/v1/publish/{slug}/metadata`, to update dashboard/UI title, description, and share-preview image without re-uploading HTML.
+Use the skill's `publish.sh --metadata-only --slug {slug}` helper, or `PATCH /api/v1/publish/{slug}/metadata`, to update dashboard/UI title, description, and share-preview image without re-uploading HTML. Put `og.png` in the Site directory and set `--og-image-path /og.png`; Drive-only files are private and are not public OG image URLs.
+
+## Media Types
+
+The publish and Drive helpers preserve common web content types, including AVIF/WebP/HEIC/TIFF images, MP4/MOV/WebM video, FLAC/AIFF/ALAC/M4A/AAC/WAV/MP3/OGG/Opus/MIDI audio, fonts, WebAssembly, web manifests, archives, structured data, SQLite/parquet files, and glTF/GLB/USDZ/STL models.
 
 ## Examples
 

@@ -46,6 +46,14 @@ The HTML should reference the image with an absolute URL after publish, for exam
 <meta property="og:image" content="https://example-slug.cresa.one/og.png">
 ```
 
+cresa.one viewer metadata should use the Site-relative path:
+
+```bash
+--og-image-path /og.png
+```
+
+Do not upload the OG image only to a Drive. Drive files are private unless published as a Site. Share-preview images must be deployed with the Site.
+
 ## Publish Pattern
 
 ```bash
@@ -68,6 +76,15 @@ To update dashboard/UI metadata after the app is already live, use the metadata 
   --description "Short share-preview description" \
   --og-image-path /og.png \
   --client claude
+```
+
+Verify after publish:
+
+```bash
+curl -fsSI "https://{clean-slug}.cresa.one/og.png" | grep -i '^content-type:'
+curl -sS "https://cresa.one/api/v1/publish/{clean-slug}" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" |
+  jq '{viewer,tags,manifest}'
 ```
 
 ## Scope Boundary

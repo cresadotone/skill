@@ -101,18 +101,69 @@ compute_sha256() {
 
 guess_content_type() {
   local f="$1"
-  case "${f##*.}" in
+  local ext="${f##*.}"
+  ext="$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')"
+  case "$ext" in
     html|htm) echo "text/html; charset=utf-8" ;;
     css) echo "text/css; charset=utf-8" ;;
-    js|mjs) echo "text/javascript; charset=utf-8" ;;
+    js|mjs|cjs) echo "text/javascript; charset=utf-8" ;;
     json) echo "application/json; charset=utf-8" ;;
-    md|txt) echo "text/plain; charset=utf-8" ;;
+    jsonld) echo "application/ld+json; charset=utf-8" ;;
+    map) echo "application/json; charset=utf-8" ;;
+    md|txt|log) echo "text/plain; charset=utf-8" ;;
+    csv) echo "text/csv; charset=utf-8" ;;
+    tsv) echo "text/tab-separated-values; charset=utf-8" ;;
+    yaml|yml) echo "application/yaml; charset=utf-8" ;;
+    toml) echo "application/toml; charset=utf-8" ;;
     svg) echo "image/svg+xml" ;;
     png) echo "image/png" ;;
     jpg|jpeg) echo "image/jpeg" ;;
     gif) echo "image/gif" ;;
     webp) echo "image/webp" ;;
+    avif) echo "image/avif" ;;
+    bmp) echo "image/bmp" ;;
+    tif|tiff) echo "image/tiff" ;;
+    heic) echo "image/heic" ;;
+    heif) echo "image/heif" ;;
+    ico) echo "image/x-icon" ;;
     pdf) echo "application/pdf" ;;
+    wasm) echo "application/wasm" ;;
+    webmanifest) echo "application/manifest+json; charset=utf-8" ;;
+    zip) echo "application/zip" ;;
+    gz) echo "application/gzip" ;;
+    tar) echo "application/x-tar" ;;
+    tgz) echo "application/gzip" ;;
+    parquet) echo "application/vnd.apache.parquet" ;;
+    sqlite|sqlite3|db) echo "application/vnd.sqlite3" ;;
+    mp4) echo "video/mp4" ;;
+    m4v) echo "video/mp4" ;;
+    mov) echo "video/quicktime" ;;
+    webm) echo "video/webm" ;;
+    ogv) echo "video/ogg" ;;
+    mpeg|mpg) echo "video/mpeg" ;;
+    avi) echo "video/x-msvideo" ;;
+    mp3) echo "audio/mpeg" ;;
+    wav) echo "audio/wav" ;;
+    flac) echo "audio/flac" ;;
+    aiff|aif|aifc) echo "audio/aiff" ;;
+    alac) echo "audio/mp4" ;;
+    m4a) echo "audio/mp4" ;;
+    aac) echo "audio/aac" ;;
+    ogg|oga) echo "audio/ogg" ;;
+    opus) echo "audio/opus" ;;
+    midi|mid) echo "audio/midi" ;;
+    caf) echo "audio/x-caf" ;;
+    weba) echo "audio/webm" ;;
+    xml) echo "application/xml" ;;
+    woff2) echo "font/woff2" ;;
+    woff) echo "font/woff" ;;
+    ttf) echo "font/ttf" ;;
+    otf) echo "font/otf" ;;
+    eot) echo "application/vnd.ms-fontobject" ;;
+    gltf) echo "model/gltf+json" ;;
+    glb) echo "model/gltf-binary" ;;
+    usdz) echo "model/vnd.usdz+zip" ;;
+    stl) echo "model/stl" ;;
     *) file --brief --mime-type "$f" 2>/dev/null || echo "application/octet-stream" ;;
   esac
 }

@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.17.0**
+**Skill version: 1.18.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -92,23 +92,53 @@ With a saved API key, the site is permanent.
 
 You can also publish raw files without any HTML. Single files get a rich auto-viewer (images, PDF, video, audio). Multiple files get an auto-generated directory listing with folder navigation and an image gallery.
 
+The helpers set `Content-Type` from file extension and fall back to `file(1)`. Common supported types include HTML/CSS/JS/JSON, Markdown/text/CSV/YAML/TOML, images (`png`, `jpg`, `webp`, `avif`, `heic`, `tiff`, `svg`), video (`mp4`, `mov`, `webm`, `ogv`), audio (`mp3`, `wav`, `flac`, `aiff`, `alac`, `m4a`, `aac`, `ogg`, `oga`, `opus`, `midi`, `caf`, `weba`), fonts (`woff2`, `woff`, `ttf`, `otf`), WebAssembly, web manifests, archives, GLTF/GLB/USDZ/STL models, Parquet, and SQLite.
+
 ## Rich static app publishing
 
 For polished apps, calculators, dashboards, or documents:
 
 - Publish a directory with `index.html` at its root.
 - Include `og.png` beside `index.html` when share previews matter.
-- Use absolute Open Graph URLs after publish, for example `https://{slug}.cresa.one/og.png`.
-- Pass `--title` and `--description` for viewer metadata and share-preview copy.
+- Use `--og-image-path /og.png` for cresa.one viewer metadata. This is a Site-relative path, not a Drive path.
+- Use absolute Open Graph URLs inside HTML, for example `<meta property="og:image" content="https://{slug}.cresa.one/og.png">`.
+- Pass `--title` and `--description` for dashboard/UI labels and share-preview copy.
 - Pass `--slug` for stable permanent URLs when updating a known Site.
 - Pass `--tags '["calculator","cre"]'` for authenticated Site organization.
 - Verify local rendering before publish, especially mobile width, reduced-motion behavior, copy/CSV/share actions, and console errors.
+
+Fast path for file + metadata + tags updates:
+
+```bash
+./scripts/publish.sh {site-dir} \
+  --slug {slug} \
+  --title "Market Rent Calculator" \
+  --description "Interactive CRE calculator for market rent scenarios." \
+  --og-image-path /og.png \
+  --tags '["calculator","cre"]' \
+  --client claude
+```
+
+Use this one command when files changed. It creates/updates the Site, uploads files with correct content types, finalizes, patches viewer metadata, and replaces tags. Use raw API calls only when the helper does not cover the task.
+
+Open Graph image recipe:
+
+1. Render a 1200x630 PNG such as `og.png`.
+2. Put it beside `index.html` in the published directory.
+3. Reference it in HTML with an absolute URL after publish.
+4. Set cresa.one viewer metadata with `--og-image-path /og.png`.
+5. Verify `https://{slug}.cresa.one/og.png` returns an image.
 
 For a reusable design pattern, see `examples/terminal-instrument/`. It includes a shared app shell, config-driven runtime, generator, and optional Playwright-based OG image generator. Treat it as an example for creating consistent app families, not as required publishing infrastructure.
 
 ## Update Site metadata without uploading files
 
 Use Site metadata for the dashboard/UI title, description, and share-preview image. Do not rewrite or re-upload HTML just to update these fields. HTML `<title>` and `<meta>` tags are still useful inside the page, but cresa.one Site viewer metadata is managed by API.
+
+Decision rule:
+
+- Files changed: use normal `publish.sh {site-dir} --slug ... --title ... --og-image-path ... --tags ...`.
+- Only metadata/tags changed: use `publish.sh --metadata-only --slug ...`.
 
 ```bash
 ./scripts/publish.sh --metadata-only --slug {slug} \
@@ -119,11 +149,21 @@ Use Site metadata for the dashboard/UI title, description, and share-preview ima
 
 This calls `PATCH /api/v1/publish/{slug}/metadata`, preserves existing viewer fields, and updates the account-owned Site without creating a new Site version. Metadata-only updates require authentication because the endpoint is owner-only.
 
+The metadata PATCH response confirms status, not the full updated viewer object:
+
+```json
+{"success":true,"passwordProtected":true,"spaMode":false}
+```
+
+`passwordProtected:true` means the Site is currently password protected; it does not mean this metadata patch changed the password.
+
 To update tags at the same time:
 
 ```bash
 ./scripts/publish.sh --metadata-only --slug {slug} --tags '["calculator","cre"]'
 ```
+
+Tags are full replacement, owner-only, normalized to lowercase, deduped, sorted in responses, max 50 kept, and each tag is max 32 characters. Tags are not accepted in publish create/update bodies; use `PUT /api/v1/publish/{slug}/tags` or `publish.sh --tags`.
 
 Raw API equivalent:
 
@@ -133,6 +173,35 @@ curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/metadata" \
   -H "content-type: application/json" \
   -d '{"viewer":{"title":"Market Rent Calculator","description":"Interactive CRE calculator for market rent scenarios.","ogImagePath":"/og.png"}}'
 ```
+
+Verify Site metadata from `GET /api/v1/publish/{slug}`. Viewer fields live under `.viewer`, not top-level keys:
+
+```bash
+curl -sS "https://cresa.one/api/v1/publish/{slug}" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" |
+  jq '{slug,status,viewer,tags,manifest}'
+```
+
+Expected shape:
+
+```json
+{
+  "slug": "market-rent",
+  "status": "published",
+  "viewer": {
+    "title": "Market Rent Calculator",
+    "description": "Interactive CRE calculator for market rent scenarios.",
+    "ogImagePath": "/og.png"
+  },
+  "tags": ["calculator", "cre"],
+  "manifest": [
+    {"path": "index.html", "size": 12345, "contentType": "text/html; charset=utf-8"},
+    {"path": "og.png", "size": 67890, "contentType": "image/png"}
+  ]
+}
+```
+
+Manifest `contentType` reports what was stored during upload. If it is wrong, republish with the current helper so upload PUT requests send the correct `Content-Type`.
 
 ## Update an existing site
 
@@ -173,6 +242,53 @@ Every signed-in account has a default Drive named `My Drive`.
 ```
 
 Use scoped Drive tokens for agent-to-agent handoff. If you receive a `cresaone_drive` share block, use its `token` as `Authorization: Bearer <token>` against `api_base`, respect `pathPrefix` when present, and preserve ETags on writes. A `pathPrefix` of `null` means full-Drive access. If the skill is available, prefer `./scripts/drive.sh`; otherwise call the listed API operations directly.
+
+Prefer `drive.sh` for backups and version snapshots:
+
+```bash
+./scripts/drive.sh put "My Drive" lineage/versions/v1.1/lineage.html --from ./lineage.html
+./scripts/drive.sh import "My Drive" lineage/versions/v1.1/source --from ./source
+```
+
+The helper handles content type, SHA-256, staging, returned upload headers, finalize, ETags, and upload-size verification. Do not hand-roll Drive upload functions unless the helper is unavailable.
+
+Raw Drive upload shape, when helper is unavailable:
+
+```bash
+sha=$(shasum -a 256 ./lineage.html | awk '{print $1}')
+stage=$(curl -sS -X POST "https://cresa.one/api/v1/drives/{driveId}/files/uploads" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d "{\"path\":\"lineage/lineage.html\",\"size\":12345,\"contentType\":\"text/html; charset=utf-8\",\"sha256\":\"$sha\",\"ifNoneMatch\":\"*\"}")
+upload_url=$(echo "$stage" | jq -r '.url')
+upload_id=$(echo "$stage" | jq -r '.uploadId')
+content_type=$(echo "$stage" | jq -r '.headers["Content-Type"]')
+curl -sS -X PUT "$upload_url" -H "Content-Type: $content_type" --data-binary @./lineage.html
+curl -sS -X POST "https://cresa.one/api/v1/drives/{driveId}/files/finalize" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d "{\"uploadId\":\"$upload_id\"}"
+```
+
+Use `ifNoneMatch:"*"` for create-only writes. Use `ifMatch:"{etag}"` when replacing a known existing file. Always forward upload headers returned by staging; if no headers are returned, send the same content type you staged.
+
+## Verify a publish
+
+After publishing polished apps:
+
+```bash
+curl -fsSI "https://{slug}.cresa.one/og.png" | grep -i '^content-type:'
+curl -sS "https://cresa.one/api/v1/publish/{slug}" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" |
+  jq '{viewer,tags,manifest}'
+```
+
+Check:
+
+- `.viewer.title`, `.viewer.description`, and `.viewer.ogImagePath` are present.
+- `.viewer.ogImagePath == "/og.png"`.
+- `.tags` contains expected normalized tags.
+- `manifest[]` has correct content types such as `text/html; charset=utf-8` and `image/png`.
 
 ## Client attribution
 

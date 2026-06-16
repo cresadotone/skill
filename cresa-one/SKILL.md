@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.18.0**
+**Skill version: 1.19.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -31,6 +31,10 @@ Every Site has access control: public link (default), password, or restricted in
 To install or update (recommended): `npx skills add cresadotone/skill --skill cresa-one -g`
 
 For repo-pinned/project-local installs, run the same command without `-g`.
+
+For Claude Code/Cowork fallback installs, use `curl -fsSL https://cresa.one/install.sh | bash`. This also installs `/cresa-one` at `~/.claude/commands/cresa-one.md`.
+
+When `/cresa-one` is typed, the command checks `https://cresa.one/api/skill/version`. If a newer skill version exists, it automatically runs `curl -fsSL https://cresa.one/install.sh | bash` before continuing, so local skill files, helpers, bundled `jq`, and the slash command update together.
 
 ## Current docs
 

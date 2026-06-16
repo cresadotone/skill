@@ -14,6 +14,8 @@ Or without npm:
 curl -fsSL https://cresa.one/install.sh | bash
 ```
 
+Fallback installer also installs `/cresa-one` for Claude Code/Cowork. Typing `/cresa-one` checks live skill metadata and automatically runs the hosted installer when a newer version exists, so local skill files, helper scripts, bundled `jq`, and the command update together.
+
 ### Install in Hermes
 
 Direct from the public GitHub skill repo:

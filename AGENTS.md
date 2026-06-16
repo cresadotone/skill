@@ -7,6 +7,7 @@ Use this file as the operating guide for AI coding agents working in the public 
 - `cresa-one/` - canonical cresa.one skill bundle for `npx skills add cresadotone/skill --skill cresa-one`.
 - `skills/cresa-one/` - generated compatibility mirror for Cursor/Codex plugin discovery.
 - `hermes/` - Hermes community skill bundle.
+- `commands/cresa-one.md` - Claude Code/Cowork slash command that auto-updates the installed skill through the hosted installer.
 - `.cursor-plugin/` and `.codex-plugin/` - marketplace/plugin manifests.
 - `README.md` - public install and overview docs.
 
@@ -25,6 +26,7 @@ If local skill text and live docs disagree, prefer live docs for product capabil
 ## Editing Guidance
 
 - Keep `cresa-one/SKILL.md` and `skills/cresa-one/SKILL.md` synchronized.
+- Keep `commands/cresa-one.md` compatible with `install.sh`; fallback installs copy it to `~/.claude/commands/cresa-one.md`.
 - Keep helper scripts such as `publish.sh` and `drive.sh` compatible with documented behavior.
 - Do not add claims for MCP, OAuth, Web Bot Auth, verified platform integrations, or official public CLI packaging unless those surfaces are live and maintained.
 - Never commit credentials, API keys, Drive tokens, or `.cresaone/state.json`.

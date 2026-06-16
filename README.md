@@ -32,6 +32,14 @@ hermes skills install well-known:https://cresa.one/.well-known/skills/cresa.one
 
 Full documentation: **https://cresa.one/docs**
 
+## Site Metadata
+
+Use the skill's `publish.sh --metadata-only --slug {slug}` helper, or `PATCH /api/v1/publish/{slug}/metadata`, to update dashboard/UI title, description, and share-preview image without re-uploading HTML.
+
+## Examples
+
+- `examples/terminal-instrument/` - optional pattern for consistent self-contained apps with a shared shell, config-driven runtime, and Open Graph image generator.
+
 ## Source
 
 This public skill bundle is synced from the private cresa.one product repo. Make changes in the private repo under `skill/`; the public `cresadotone/skill` repo is the mirror used for installs.

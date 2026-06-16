@@ -98,6 +98,50 @@ With a saved API key, the site is permanent.
 
 You can also publish raw files without any HTML. Single files get a rich auto-viewer (images, PDF, video, audio). Multiple files get an auto-generated directory listing with folder navigation and an image gallery.
 
+## Rich static app publishing
+
+For polished apps, calculators, dashboards, or documents:
+
+- Publish a directory with `index.html` at its root.
+- Include `og.png` beside `index.html` when share previews matter.
+- Use absolute Open Graph URLs after publish, for example `https://{slug}.cresa.one/og.png`.
+- Pass `--title` and `--description` for viewer metadata and share-preview copy.
+- Pass `--slug` for stable permanent URLs when updating a known Site.
+- Pass `--tags '["calculator","cre"]'` for authenticated Site organization.
+- Verify local rendering before publish, especially mobile width, reduced-motion behavior, copy/CSV/share actions, and console errors.
+
+For a reusable design pattern, see `examples/terminal-instrument/` in the public skill repo. It includes a shared app shell, config-driven runtime, generator, and optional Playwright-based OG image generator. Treat it as an example for creating consistent app families, not as required publishing infrastructure.
+
+## Update Site metadata without uploading files
+
+Use Site metadata for the dashboard/UI title, description, and share-preview image. Do not rewrite or re-upload HTML just to update these fields. HTML `<title>` and `<meta>` tags are still useful inside the page, but cresa.one Site viewer metadata is managed by API.
+
+```bash
+PUBLISH="${HERMES_SKILL_DIR}/scripts/publish.sh"
+bash "$PUBLISH" --metadata-only --slug {slug} \
+  --title "Market Rent Calculator" \
+  --description "Interactive CRE calculator for market rent scenarios." \
+  --og-image-path /og.png \
+  --client hermes
+```
+
+This calls `PATCH /api/v1/publish/{slug}/metadata`, preserves existing viewer fields, and updates the account-owned Site without creating a new Site version. Metadata-only updates require authentication because the endpoint is owner-only.
+
+To update tags at the same time:
+
+```bash
+bash "$PUBLISH" --metadata-only --slug {slug} --tags '["calculator","cre"]' --client hermes
+```
+
+Raw API equivalent:
+
+```bash
+curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/metadata" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"viewer":{"title":"Market Rent Calculator","description":"Interactive CRE calculator for market rent scenarios.","ogImagePath":"/og.png"}}'
+```
+
 ## Update an existing site
 
 ```bash
@@ -231,8 +275,11 @@ For Drives:
 | `--claim-token {token}`| Override claim token for anonymous updates    |
 | `--title {text}`       | Viewer title (non-HTML sites)             |
 | `--description {text}` | Viewer description                            |
+| `--og-image-path {path}` | Viewer/Open Graph image path, e.g. `/og.png` |
+| `--metadata-only`      | Patch viewer metadata, TTL, SPA mode, or tags without uploading files |
 | `--ttl {seconds}`      | Set expiry (authenticated only)               |
 | `--client {name}`      | Agent name for attribution (e.g. `hermes`)    |
+| `--tags {json-array}`  | Replace Site tags after publish; requires authentication |
 | `--base-url {url}`     | API base URL (default: `https://cresa.one`)    |
 | `--allow-noncresaone-base-url` | Allow sending auth to non-default `--base-url` |
 | `--api-key {key}`      | API key override (prefer credentials file)    |

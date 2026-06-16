@@ -13,12 +13,16 @@ SLUG=""
 CLAIM_TOKEN=""
 TITLE=""
 DESCRIPTION=""
+OG_IMAGE_PATH=""
 TTL=""
 CLIENT=""
 TARGET=""
 SPA_MODE=""
 FROM_DRIVE=""
 DRIVE_VERSION=""
+TAGS=""
+TAGS_JSON=""
+METADATA_ONLY=""
 
 usage() {
   cat <<'USAGE'
@@ -30,8 +34,11 @@ Options:
   --claim-token <token>   Claim token for anonymous updates
   --title <text>          Viewer title
   --description <text>    Viewer description
+  --og-image-path <path>  Viewer/Open Graph image path (for example /og.png)
+  --metadata-only         Patch viewer metadata/TTL/SPA/tags without uploading files
   --ttl <seconds>         Expiry (authenticated only)
   --client <name>         Agent name for attribution (e.g. cursor, claude-code)
+  --tags <json-array>     Replace Site tags after publish (authenticated only)
   --spa                   Enable SPA routing
   --from-drive <drv_...>  Publish a Drive snapshot instead of local files
   --version <dv_...>      Drive version for --from-drive (default: current head)
@@ -67,8 +74,11 @@ while [[ $# -gt 0 ]]; do
     --claim-token)  CLAIM_TOKEN="$2"; shift 2 ;;
     --title)        TITLE="$2"; shift 2 ;;
     --description)  DESCRIPTION="$2"; shift 2 ;;
+    --og-image-path) OG_IMAGE_PATH="$2"; shift 2 ;;
+    --metadata-only) METADATA_ONLY="true"; shift ;;
     --ttl)          TTL="$2"; shift 2 ;;
     --client)       CLIENT="$2"; shift 2 ;;
+    --tags)         TAGS="$2"; shift 2 ;;
     --base-url)     BASE_URL="$2"; shift 2 ;;
     --allow-noncresaone-base-url) ALLOW_NON_CRESAONE_BASE_URL=1; shift ;;
     --spa)          SPA_MODE="true"; shift ;;
@@ -80,7 +90,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -n "$FROM_DRIVE" ]]; then
+if [[ "$METADATA_ONLY" == "true" ]]; then
+  [[ -n "$SLUG" ]] || die "--metadata-only requires --slug"
+  [[ -z "$TARGET" ]] || die "--metadata-only does not accept a local file-or-dir argument"
+  [[ -z "$FROM_DRIVE" ]] || die "--metadata-only cannot be combined with --from-drive"
+elif [[ -n "$FROM_DRIVE" ]]; then
   [[ -z "$TARGET" ]] || die "--from-drive does not accept a local file-or-dir argument"
 else
   [[ -n "$TARGET" ]] || usage
@@ -102,6 +116,124 @@ if [[ -n "$API_KEY" && "$BASE_URL" != "https://cresa.one" && "$ALLOW_NON_CRESAON
   die "refusing to send API key to non-default base URL; pass --allow-noncresaone-base-url to override"
 fi
 
+build_client_header() {
+  local value="cresa-one-publish-sh"
+  if [[ -n "$CLIENT" ]]; then
+    local normalized_client
+    normalized_client=$(echo "$CLIENT" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
+    normalized_client="${normalized_client#-}"
+    normalized_client="${normalized_client%-}"
+    if [[ -n "$normalized_client" ]]; then
+      value="${normalized_client}/publish-sh"
+    fi
+  fi
+  echo "$value"
+}
+
+CLIENT_HEADER_VALUE="$(build_client_header)"
+
+has_viewer_fields() {
+  [[ -n "$TITLE" || -n "$DESCRIPTION" || -n "$OG_IMAGE_PATH" ]]
+}
+
+if [[ -n "$TAGS" ]]; then
+  [[ -n "$API_KEY" ]] || die "--tags requires an authenticated publish; set CRESAONE_API_KEY or ~/.cresaone/credentials"
+  if ! TAGS_JSON=$(printf '%s' "$TAGS" | "$JQ_BIN" -c 'if type == "array" and all(.[]; type == "string") then . else error("tags must be a JSON array of strings") end' 2>/dev/null); then
+    die "--tags must be a JSON array of strings, e.g. '[\"cre\",\"calculator\"]'"
+  fi
+fi
+
+apply_tags() {
+  local slug="$1"
+  local client_header_value="$2"
+  [[ -n "$TAGS_JSON" ]] || return 0
+  local body response out_tags
+  body=$(printf '%s' "$TAGS_JSON" | "$JQ_BIN" '{tags:.}')
+  echo "updating tags..." >&2
+  response=$(curl -sS -X PUT "$BASE_URL/api/v1/publish/$slug/tags" \
+    -H "authorization: Bearer $API_KEY" \
+    -H "x-cresaone-client: $client_header_value" \
+    -H "content-type: application/json" \
+    -d "$body")
+  if echo "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    err=$(echo "$response" | "$JQ_BIN" -r '.error')
+    details=$(echo "$response" | "$JQ_BIN" -r '.details // empty')
+    die "tag update failed: $err${details:+ ($details)}"
+  fi
+  out_tags=$(echo "$response" | "$JQ_BIN" -c '.tags // []')
+  echo "publish_result.tags=$out_tags" >&2
+}
+
+build_viewer_json() {
+  local slug="$1"
+  local viewer="{}"
+  if [[ -n "$slug" && -n "$API_KEY" ]]; then
+    local response
+    response=$(curl -sS -X GET "$BASE_URL/api/v1/publish/$slug" \
+      -H "authorization: Bearer $API_KEY" \
+      -H "x-cresaone-client: $CLIENT_HEADER_VALUE")
+    if echo "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+      err=$(echo "$response" | "$JQ_BIN" -r '.error')
+      details=$(echo "$response" | "$JQ_BIN" -r '.details // empty')
+      die "metadata fetch failed: $err${details:+ ($details)}"
+    fi
+    viewer=$(echo "$response" | "$JQ_BIN" -c '.viewer // {}')
+  fi
+  [[ -n "$TITLE" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg t "$TITLE" '.title = $t')
+  [[ -n "$DESCRIPTION" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg d "$DESCRIPTION" '.description = $d')
+  [[ -n "$OG_IMAGE_PATH" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg p "$OG_IMAGE_PATH" '.ogImagePath = $p')
+  echo "$viewer"
+}
+
+patch_metadata() {
+  local slug="$1"
+  local body="{}"
+  if [[ -n "$TTL" ]]; then
+    body=$(echo "$body" | "$JQ_BIN" --argjson t "$TTL" '.ttlSeconds = $t')
+  fi
+  if [[ "$SPA_MODE" == "true" ]]; then
+    body=$(echo "$body" | "$JQ_BIN" '.spaMode = true')
+  fi
+  if has_viewer_fields; then
+    local viewer
+    viewer=$(build_viewer_json "$slug")
+    body=$(echo "$body" | "$JQ_BIN" --argjson v "$viewer" '.viewer = $v')
+  fi
+  [[ "$body" != "{}" ]] || return 0
+
+  echo "patching metadata..." >&2
+  local response
+  response=$(curl -sS -X PATCH "$BASE_URL/api/v1/publish/$slug/metadata" \
+    -H "authorization: Bearer $API_KEY" \
+    -H "x-cresaone-client: $CLIENT_HEADER_VALUE" \
+    -H "content-type: application/json" \
+    -d "$body")
+  if echo "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    err=$(echo "$response" | "$JQ_BIN" -r '.error')
+    details=$(echo "$response" | "$JQ_BIN" -r '.details // empty')
+    die "metadata update failed: $err${details:+ ($details)}"
+  fi
+  echo "publish_result.metadata_updated=true" >&2
+}
+
+if [[ "$METADATA_ONLY" == "true" ]]; then
+  [[ -n "$API_KEY" ]] || die "--metadata-only requires an authenticated Site; set CRESAONE_API_KEY or ~/.cresaone/credentials"
+  if ! has_viewer_fields && [[ -z "$TTL" && "$SPA_MODE" != "true" && -z "$TAGS_JSON" ]]; then
+    die "--metadata-only requires --title, --description, --og-image-path, --ttl, --spa, or --tags"
+  fi
+  patch_metadata "$SLUG"
+  apply_tags "$SLUG" "$CLIENT_HEADER_VALUE"
+  SITE_URL="https://$SLUG.cresa.one"
+  echo "$SITE_URL"
+  echo "" >&2
+  echo "publish_result.site_url=$SITE_URL" >&2
+  echo "publish_result.slug=$SLUG" >&2
+  echo "publish_result.action=metadata" >&2
+  echo "publish_result.auth_mode=authenticated" >&2
+  echo "publish_result.api_key_source=$API_KEY_SOURCE" >&2
+  exit 0
+fi
+
 # Auto-load claim token from state file for slug updates (server uses it only for
 # anonymous sites; harmless when an API key is also present).
 if [[ -n "$SLUG" && -z "$CLAIM_TOKEN" && -f "$STATE_FILE" ]]; then
@@ -113,22 +245,11 @@ if [[ -n "$FROM_DRIVE" ]]; then
   BODY=$("$JQ_BIN" -n --arg d "$FROM_DRIVE" '{driveId:$d}')
   [[ -n "$DRIVE_VERSION" ]] && BODY=$(echo "$BODY" | "$JQ_BIN" --arg v "$DRIVE_VERSION" '.versionId = $v')
   [[ -n "$SLUG" ]] && BODY=$(echo "$BODY" | "$JQ_BIN" --arg s "$SLUG" '.slug = $s')
-  if [[ -n "$TITLE" || -n "$DESCRIPTION" ]]; then
-    viewer="{}"
-    [[ -n "$TITLE" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg t "$TITLE" '.title = $t')
-    [[ -n "$DESCRIPTION" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg d "$DESCRIPTION" '.description = $d')
+  if has_viewer_fields; then
+    viewer=$(build_viewer_json "")
     BODY=$(echo "$BODY" | "$JQ_BIN" --argjson v "$viewer" '.viewer = $v')
   fi
   [[ "$SPA_MODE" == "true" ]] && BODY=$(echo "$BODY" | "$JQ_BIN" '.spaMode = true')
-  CLIENT_HEADER_VALUE="cresa-one-publish-sh"
-  if [[ -n "$CLIENT" ]]; then
-    normalized_client=$(echo "$CLIENT" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
-    normalized_client="${normalized_client#-}"
-    normalized_client="${normalized_client%-}"
-    if [[ -n "$normalized_client" ]]; then
-      CLIENT_HEADER_VALUE="${normalized_client}/publish-sh"
-    fi
-  fi
 
   echo "publishing from Drive..." >&2
   RESPONSE=$(curl -sS -X POST "$BASE_URL/api/v1/publish/from-drive" \
@@ -145,6 +266,7 @@ if [[ -n "$FROM_DRIVE" ]]; then
   CURRENT_VERSION=$(echo "$RESPONSE" | "$JQ_BIN" -r '.currentVersionId')
   DRIVE_VERSION_OUT=$(echo "$RESPONSE" | "$JQ_BIN" -r '.driveVersionId')
   echo "$SITE_URL"
+  apply_tags "$OUT_SLUG" "$CLIENT_HEADER_VALUE"
   echo "" >&2
   echo "publish_result.site_url=$SITE_URL" >&2
   echo "publish_result.slug=$OUT_SLUG" >&2
@@ -239,10 +361,8 @@ if [[ -n "$TTL" ]]; then
   BODY=$(echo "$BODY" | "$JQ_BIN" --argjson t "$TTL" '.ttlSeconds = $t')
 fi
 
-if [[ -n "$TITLE" || -n "$DESCRIPTION" ]]; then
-  viewer="{}"
-  [[ -n "$TITLE" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg t "$TITLE" '.title = $t')
-  [[ -n "$DESCRIPTION" ]] && viewer=$(echo "$viewer" | "$JQ_BIN" --arg d "$DESCRIPTION" '.description = $d')
+if has_viewer_fields; then
+  viewer=$(build_viewer_json "$SLUG")
   BODY=$(echo "$BODY" | "$JQ_BIN" --argjson v "$viewer" '.viewer = $v')
 fi
 
@@ -274,15 +394,6 @@ if [[ -n "$API_KEY" ]]; then
   AUTH_MODE="authenticated"
 fi
 
-CLIENT_HEADER_VALUE="cresa-one-publish-sh"
-if [[ -n "$CLIENT" ]]; then
-  normalized_client=$(echo "$CLIENT" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
-  normalized_client="${normalized_client#-}"
-  normalized_client="${normalized_client%-}"
-  if [[ -n "$normalized_client" ]]; then
-    CLIENT_HEADER_VALUE="${normalized_client}/publish-sh"
-  fi
-fi
 CLIENT_ARGS=(-H "x-cresaone-client: $CLIENT_HEADER_VALUE")
 
 # Step 1: Create/update publish
@@ -361,6 +472,8 @@ if echo "$FIN_RESPONSE" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
   err=$(echo "$FIN_RESPONSE" | "$JQ_BIN" -r '.error')
   die "finalize failed: $err"
 fi
+
+apply_tags "$OUT_SLUG" "$CLIENT_HEADER_VALUE"
 
 # Save state
 mkdir -p "$STATE_DIR"

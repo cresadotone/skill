@@ -1,7 +1,7 @@
 {
   "name": "cresa-one",
-  "version": "0.1.2",
-  "description": "Publish websites, apps, and files, and store private files in cloud Drives.",
+  "version": "0.1.3",
+  "description": "Publish websites, apps, and files, and store private files in cloud Drives. Fallback installs package .skill and .zip archives for app import.",
   "author": {
     "name": "cresa.one",
     "url": "https://cresa.one"
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "cresa.one",
     "shortDescription": "Publish websites and store private agent files.",
-    "longDescription": "cresa.one lets agents publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or use private cloud Drives for agent files such as documents, context, memory, plans, assets, media, research, code, etc. Supports passwords, custom domains, proxy routes, and /cresa-one auto-update via the hosted installer — see cresa.one/docs for the full feature set.",
+    "longDescription": "cresa.one lets agents publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or use private cloud Drives for agent files such as documents, context, memory, plans, assets, media, research, code, etc. Supports passwords, custom domains, proxy routes, and /cresa-one auto-update via the hosted installer — fallback installs also package .skill and .zip archives for app import; see cresa.one/docs for the full feature set.",
     "developerName": "cresa.one",
     "category": "Coding",
     "websiteURL": "https://cresa.one",

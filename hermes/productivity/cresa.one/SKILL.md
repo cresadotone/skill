@@ -13,7 +13,7 @@ description: >
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
   site with only certain people".
-version: 1.19.0
+version: 1.20.0
 author: cresa.one
 license: MIT
 prerequisites:

@@ -1,7 +1,7 @@
 {
   "name": "cresa.one",
-  "description": "Publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or store agent files in private Drives. Includes /cresa-one auto-update for Claude Code/Cowork fallback installs.",
-  "version": "0.1.2",
+  "description": "Publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or store agent files in private Drives. Includes /cresa-one auto-update for Claude Code/Cowork fallback installs. Fallback installs package .skill and .zip archives for app import.",
+  "version": "0.1.3",
   "author": {
     "name": "cresa.one"
   },

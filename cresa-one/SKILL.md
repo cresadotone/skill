@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.19.0**
+**Skill version: 1.20.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -35,6 +35,13 @@ For repo-pinned/project-local installs, run the same command without `-g`.
 For Claude Code/Cowork fallback installs, use `curl -fsSL https://cresa.one/install.sh | bash`. This also installs `/cresa-one` at `~/.claude/commands/cresa-one.md`.
 
 When `/cresa-one` is typed, the command checks `https://cresa.one/api/skill/version`. If a newer skill version exists, it automatically runs `curl -fsSL https://cresa.one/install.sh | bash` before continuing, so local skill files, helpers, bundled `jq`, and the slash command update together.
+
+Every fallback install/update also packages the installed skill into portable archives under `~/.claude/skills/cresa-one/packages/`:
+
+- `cresa-one-{version}.skill`
+- `cresa-one-{version}.zip`
+
+When installer output includes `present files to the user`, present files to the user using the local environment's file presentation/attachment mechanism. These archives are for quick import into apps such as Claude Desktop, Codex, and other skill-compatible clients.
 
 ## Current docs
 

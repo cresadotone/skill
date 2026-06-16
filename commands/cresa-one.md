@@ -66,6 +66,7 @@ fi
 
 After preflight:
 
+- If installer output includes `present files to the user`, present files to the user using the current environment's file presentation/attachment mechanism. The listed `.skill` and `.zip` archives are for quick installation in Claude Desktop, Codex, or other skill-compatible apps.
 - If `$ARGUMENTS` is empty, `status`, or `help`, summarize installed version and these helpers:
   - Publish: `~/.claude/skills/cresa-one/scripts/publish.sh`
   - Drive: `~/.claude/skills/cresa-one/scripts/drive.sh`

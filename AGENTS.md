@@ -18,7 +18,7 @@ The public skill repo is synced from the private cresa.one product repo.
 - Agent context: [https://cresa.one/llms.txt](https://cresa.one/llms.txt)
 - Full agent context: [https://cresa.one/llms-full.txt](https://cresa.one/llms-full.txt)
 - API spec: [https://cresa.one/openapi.json](https://cresa.one/openapi.json)
-- Skill version metadata: [https://cresa.one/api/skill/version](https://cresa.one/api/skill/version)
+- Skill version metadata + changelog: [https://cresa.one/api/skill/version](https://cresa.one/api/skill/version)
 
 If local skill text and live docs disagree, prefer live docs for product capabilities and live API responses for active operations.
 

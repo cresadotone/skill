@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.16.0**
+**Skill version: 1.17.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 

@@ -85,7 +85,7 @@ If the docs fetch fails or times out, continue with the local skill and live API
 ./scripts/publish.sh {file-or-dir}
 ```
 
-Outputs the live URL (e.g. `https://bright-canvas-a7k2.cresa.one/`).
+Outputs the live URL (e.g. `https://bright-anchor-v7w4.cresa.one/`).
 
 Under the hood this is a three-step flow: create/update -> upload files -> finalize. A site is not live until finalize succeeds.
 
@@ -358,10 +358,10 @@ After every site create/update, the script writes to `.cresaone/state.json` in t
 ```json
 {
   "publishes": {
-    "bright-canvas-a7k2": {
-      "siteUrl": "https://bright-canvas-a7k2.cresa.one/",
+    "bright-anchor-v7w4": {
+      "siteUrl": "https://bright-anchor-v7w4.cresa.one/",
       "claimToken": "abc123",
-      "claimUrl": "https://cresa.one/claim?slug=bright-canvas-a7k2&token=abc123",
+      "claimUrl": "https://cresa.one/claim?slug=bright-anchor-v7w4&token=abc123",
       "expiresAt": "2026-02-18T01:00:00.000Z"
     }
   }

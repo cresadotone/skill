@@ -42,5 +42,5 @@ For skill/runtime changes, check:
 curl -s https://cresa.one/api/skill/version
 curl -s https://cresa.one/skill.md | head -20
 curl -s https://cresa.one/.well-known/skills/index.json
-curl -s https://cresa.one/.well-known/skills/cresa.one/SKILL.md | head -20
+curl -s https://cresa.one/.well-known/skills/cresa.one | head -20
 ```

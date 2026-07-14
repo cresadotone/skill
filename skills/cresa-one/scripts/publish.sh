@@ -23,10 +23,15 @@ DRIVE_VERSION=""
 TAGS=""
 TAGS_JSON=""
 METADATA_ONLY=""
+VERIFY=1
+VERIFY_LIMIT=50
+RENAME_TO=""
+CHECK_SLUG=""
+SUGGEST_SLUG=0
 
 usage() {
   cat <<'USAGE'
-Usage: publish.sh <file-or-dir> [options]
+Usage: publish.sh [file-or-dir] [options]
 
 Options:
   --api-key <key>         API key (or set $CRESAONE_API_KEY)
@@ -36,6 +41,11 @@ Options:
   --description <text>    Viewer description
   --og-image-path <path>  Viewer/Open Graph image path (for example /og.png)
   --metadata-only         Patch viewer metadata/TTL/SPA/tags without uploading files
+  --verify               Verify live bytes, content types, and metadata (default)
+  --no-verify            Skip post-publish verification
+  --rename-to <slug>     Rename --slug without uploading files (authenticated only)
+  --check-slug <slug>    Print slug availability; exits non-zero when unavailable
+  --suggest-slug         Print a fresh available slug (authenticated only)
   --ttl <seconds>         Expiry (authenticated only)
   --client <name>         Agent name for attribution (e.g. cursor, claude-code)
   --tags <json-array>     Replace Site tags after publish (authenticated only)
@@ -50,6 +60,10 @@ USAGE
 }
 
 die() { echo "error: $1" >&2; exit 1; }
+
+require_flag_value() {
+  [[ -n "${2:-}" ]] || die "$1 requires a value"
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -69,28 +83,50 @@ done
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --api-key)      API_KEY="$2"; API_KEY_SOURCE="flag"; shift 2 ;;
-    --slug)         SLUG="$2"; shift 2 ;;
-    --claim-token)  CLAIM_TOKEN="$2"; shift 2 ;;
-    --title)        TITLE="$2"; shift 2 ;;
-    --description)  DESCRIPTION="$2"; shift 2 ;;
-    --og-image-path) OG_IMAGE_PATH="$2"; shift 2 ;;
+    --api-key)      require_flag_value "$1" "${2:-}"; API_KEY="$2"; API_KEY_SOURCE="flag"; shift 2 ;;
+    --slug)         require_flag_value "$1" "${2:-}"; SLUG="$2"; shift 2 ;;
+    --claim-token)  require_flag_value "$1" "${2:-}"; CLAIM_TOKEN="$2"; shift 2 ;;
+    --title)        require_flag_value "$1" "${2:-}"; TITLE="$2"; shift 2 ;;
+    --description)  require_flag_value "$1" "${2:-}"; DESCRIPTION="$2"; shift 2 ;;
+    --og-image-path) require_flag_value "$1" "${2:-}"; OG_IMAGE_PATH="$2"; shift 2 ;;
     --metadata-only) METADATA_ONLY="true"; shift ;;
-    --ttl)          TTL="$2"; shift 2 ;;
-    --client)       CLIENT="$2"; shift 2 ;;
-    --tags)         TAGS="$2"; shift 2 ;;
-    --base-url)     BASE_URL="$2"; shift 2 ;;
+    --verify)        VERIFY=1; shift ;;
+    --no-verify)     VERIFY=0; shift ;;
+    --rename-to)     require_flag_value "$1" "${2:-}"; RENAME_TO="$2"; shift 2 ;;
+    --check-slug)    require_flag_value "$1" "${2:-}"; CHECK_SLUG="$2"; shift 2 ;;
+    --suggest-slug)  SUGGEST_SLUG=1; shift ;;
+    --ttl)          require_flag_value "$1" "${2:-}"; TTL="$2"; shift 2 ;;
+    --client)       require_flag_value "$1" "${2:-}"; CLIENT="$2"; shift 2 ;;
+    --tags)         require_flag_value "$1" "${2:-}"; TAGS="$2"; shift 2 ;;
+    --base-url)     require_flag_value "$1" "${2:-}"; BASE_URL="$2"; shift 2 ;;
     --allow-noncresaone-base-url) ALLOW_NON_CRESAONE_BASE_URL=1; shift ;;
     --spa)          SPA_MODE="true"; shift ;;
-    --from-drive)   FROM_DRIVE="$2"; shift 2 ;;
-    --version)      DRIVE_VERSION="$2"; shift 2 ;;
+    --from-drive)   require_flag_value "$1" "${2:-}"; FROM_DRIVE="$2"; shift 2 ;;
+    --version)      require_flag_value "$1" "${2:-}"; DRIVE_VERSION="$2"; shift 2 ;;
     --help|-h)      usage ;;
     -*)             die "unknown option: $1" ;;
     *)              [[ -z "$TARGET" ]] && TARGET="$1" || die "unexpected argument: $1"; shift ;;
   esac
 done
 
-if [[ "$METADATA_ONLY" == "true" ]]; then
+action_count=0
+[[ "$METADATA_ONLY" == "true" ]] && action_count=$((action_count + 1))
+[[ -n "$RENAME_TO" ]] && action_count=$((action_count + 1))
+[[ -n "$CHECK_SLUG" ]] && action_count=$((action_count + 1))
+[[ "$SUGGEST_SLUG" -eq 1 ]] && action_count=$((action_count + 1))
+[[ "$action_count" -le 1 ]] || die "choose only one of --metadata-only, --rename-to, --check-slug, or --suggest-slug"
+
+if [[ -n "$RENAME_TO" ]]; then
+  [[ -n "$SLUG" ]] || die "--rename-to requires --slug <old-slug>"
+  [[ -z "$TARGET" ]] || die "--rename-to does not accept a local file-or-dir argument"
+  [[ -z "$FROM_DRIVE" ]] || die "--rename-to cannot be combined with --from-drive"
+  [[ -z "$TITLE$DESCRIPTION$OG_IMAGE_PATH$TTL$TAGS$SPA_MODE$CLAIM_TOKEN" ]] || die "--rename-to cannot be combined with publish or metadata mutation flags"
+elif [[ -n "$CHECK_SLUG" || "$SUGGEST_SLUG" -eq 1 ]]; then
+  [[ -z "$TARGET" ]] || die "slug helpers do not accept a local file-or-dir argument"
+  [[ -z "$SLUG" ]] || die "slug helpers do not accept --slug"
+  [[ -z "$FROM_DRIVE" ]] || die "slug helpers cannot be combined with --from-drive"
+  [[ -z "$TITLE$DESCRIPTION$OG_IMAGE_PATH$TTL$TAGS$SPA_MODE$CLAIM_TOKEN" ]] || die "slug helpers cannot be combined with publish or metadata mutation flags"
+elif [[ "$METADATA_ONLY" == "true" ]]; then
   [[ -n "$SLUG" ]] || die "--metadata-only requires --slug"
   [[ -z "$TARGET" ]] || die "--metadata-only does not accept a local file-or-dir argument"
   [[ -z "$FROM_DRIVE" ]] || die "--metadata-only cannot be combined with --from-drive"
@@ -114,6 +150,99 @@ STATE_FILE="$STATE_DIR/state.json"
 # Safety guard: avoid accidentally sending bearer auth to arbitrary endpoints.
 if [[ -n "$API_KEY" && "$BASE_URL" != "https://cresa.one" && "$ALLOW_NON_CRESAONE_BASE_URL" -ne 1 ]]; then
   die "refusing to send API key to non-default base URL; pass --allow-noncresaone-base-url to override"
+fi
+
+api_error_message() {
+  local response="$1"
+  local fallback="$2"
+  local err details
+  if printf '%s' "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    err=$(printf '%s' "$response" | "$JQ_BIN" -r '.error')
+    details=$(printf '%s' "$response" | "$JQ_BIN" -r '.details // empty')
+    printf '%s%s' "$err" "${details:+ ($details)}"
+  else
+    printf '%s' "$fallback"
+  fi
+}
+
+require_owner_auth() {
+  local action="$1"
+  [[ -n "$API_KEY" ]] || die "$action requires authentication; set CRESAONE_API_KEY or ~/.cresaone/credentials"
+}
+
+save_state_json() {
+  local state_json="$1"
+  local tmp
+  mkdir -p "$STATE_DIR"
+  tmp=$(mktemp "$STATE_DIR/state.json.XXXXXX")
+  printf '%s\n' "$state_json" | "$JQ_BIN" '.' > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+
+if [[ -n "$CHECK_SLUG" ]]; then
+  require_owner_auth "--check-slug"
+  encoded_slug=$(printf '%s' "$CHECK_SLUG" | "$JQ_BIN" -sRr @uri)
+  response=$(curl -sS "$BASE_URL/api/v1/publish/slug-available?slug=$encoded_slug" \
+    -H "authorization: Bearer $API_KEY")
+  if printf '%s' "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    die "slug check failed: $(api_error_message "$response" "unexpected response")"
+  fi
+  printf '%s\n' "$response" | "$JQ_BIN" '{slug,available,reason}'
+  [[ $(printf '%s' "$response" | "$JQ_BIN" -r '.available') == "true" ]] || exit 1
+  exit 0
+fi
+
+if [[ "$SUGGEST_SLUG" -eq 1 ]]; then
+  require_owner_auth "--suggest-slug"
+  response=$(curl -sS "$BASE_URL/api/v1/publish/slug-suggest" \
+    -H "authorization: Bearer $API_KEY")
+  if printf '%s' "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    die "slug suggestion failed: $(api_error_message "$response" "unexpected response")"
+  fi
+  suggested_slug=$(printf '%s' "$response" | "$JQ_BIN" -r '.slug // empty')
+  [[ -n "$suggested_slug" ]] || die "slug suggestion returned no slug"
+  printf '%s\n' "$suggested_slug"
+  exit 0
+fi
+
+if [[ -n "$RENAME_TO" ]]; then
+  require_owner_auth "--rename-to"
+  body=$("$JQ_BIN" -n --arg slug "$RENAME_TO" '{slug:$slug}')
+  response=$(curl -sS -X POST "$BASE_URL/api/v1/publish/$SLUG/rename" \
+    -H "authorization: Bearer $API_KEY" \
+    -H "content-type: application/json" \
+    -d "$body")
+  if printf '%s' "$response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    die "rename failed: $(api_error_message "$response" "unexpected response")"
+  fi
+  renamed_slug=$(printf '%s' "$response" | "$JQ_BIN" -r '.slug // empty')
+  renamed_url=$(printf '%s' "$response" | "$JQ_BIN" -r '.siteUrl // empty')
+  [[ -n "$renamed_slug" && -n "$renamed_url" ]] || die "rename returned an invalid response"
+
+  old_slug_normalized=$(printf '%s' "$SLUG" | "$JQ_BIN" -sRr 'gsub("^[[:space:]]+|[[:space:]]+$"; "") | ascii_downcase')
+  if [[ "$renamed_slug" == "$old_slug_normalized" ]]; then
+    printf '%s\n' "$renamed_url"
+    echo "slug unchanged: $renamed_slug" >&2
+    echo "publish_result.slug=$renamed_slug" >&2
+    echo "publish_result.action=rename_noop" >&2
+    exit 0
+  fi
+
+  old_url="${renamed_url/\/\/$renamed_slug./\/\/$SLUG.}"
+  if [[ -f "$STATE_FILE" ]] && "$JQ_BIN" -e --arg slug "$SLUG" '.publishes[$slug] != null' "$STATE_FILE" >/dev/null 2>&1; then
+    state=$("$JQ_BIN" --arg old "$SLUG" --arg new "$renamed_slug" --arg url "$renamed_url" \
+      '.publishes[$new] = (.publishes[$old] | .siteUrl = $url) | del(.publishes[$old])' "$STATE_FILE")
+    save_state_json "$state"
+    echo "updated $STATE_FILE" >&2
+  fi
+
+  printf '%s\n' "$renamed_url"
+  echo "old URL: $old_url" >&2
+  echo "new URL: $renamed_url" >&2
+  echo "warning: old host now returns 404; shared links and cached previews break, and the freed slug can be claimed by others" >&2
+  echo "publish_result.slug=$renamed_slug" >&2
+  echo "publish_result.action=rename" >&2
+  exit 0
 fi
 
 build_client_header() {
@@ -162,6 +291,13 @@ apply_tags() {
   fi
   out_tags=$(echo "$response" | "$JQ_BIN" -c '.tags // []')
   echo "publish_result.tags=$out_tags" >&2
+}
+
+fetch_site_details() {
+  local slug="$1"
+  curl -sS -X GET "$BASE_URL/api/v1/publish/$slug" \
+    -H "authorization: Bearer $API_KEY" \
+    -H "x-cresaone-client: $CLIENT_HEADER_VALUE"
 }
 
 build_viewer_json() {
@@ -216,6 +352,48 @@ patch_metadata() {
   echo "publish_result.metadata_updated=true" >&2
 }
 
+verify_site_metadata() {
+  local slug="$1"
+  if [[ -z "$API_KEY" ]]; then
+    if has_viewer_fields; then
+      echo "verification note: viewer metadata round-trip requires owner authentication; live files will still be verified" >&2
+    fi
+    return 0
+  fi
+
+  local details failures=0 actual expected
+  details=$(fetch_site_details "$slug")
+  if printf '%s' "$details" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    die "metadata verification failed: $(api_error_message "$details" "unexpected response")"
+  fi
+
+  if [[ -n "$TITLE" ]]; then
+    actual=$(printf '%s' "$details" | "$JQ_BIN" -r '.viewer.title // empty')
+    [[ "$actual" == "$TITLE" ]] || { echo "verification mismatch: viewer.title expected=$TITLE actual=$actual" >&2; failures=$((failures + 1)); }
+  fi
+  if [[ -n "$DESCRIPTION" ]]; then
+    actual=$(printf '%s' "$details" | "$JQ_BIN" -r '.viewer.description // empty')
+    [[ "$actual" == "$DESCRIPTION" ]] || { echo "verification mismatch: viewer.description expected=$DESCRIPTION actual=$actual" >&2; failures=$((failures + 1)); }
+  fi
+  if [[ -n "$OG_IMAGE_PATH" ]]; then
+    actual=$(printf '%s' "$details" | "$JQ_BIN" -r '.viewer.ogImagePath // empty')
+    [[ "$actual" == "$OG_IMAGE_PATH" ]] || { echo "verification mismatch: viewer.ogImagePath expected=$OG_IMAGE_PATH actual=$actual" >&2; failures=$((failures + 1)); }
+  fi
+  if [[ -n "$TAGS_JSON" ]]; then
+    actual=$(printf '%s' "$details" | "$JQ_BIN" -c '.tags // [] | sort')
+    expected=$(printf '%s' "$TAGS_JSON" | "$JQ_BIN" -c '
+      map(gsub("^[[:space:]]+|[[:space:]]+$"; "") | ascii_downcase)
+      | map(select(length > 0 and length <= 32))
+      | reduce .[] as $tag ([]; if index($tag) then . else . + [$tag] end)
+      | .[0:50]
+      | sort
+    ')
+    [[ "$actual" == "$expected" ]] || { echo "verification mismatch: tags expected=$expected actual=$actual" >&2; failures=$((failures + 1)); }
+  fi
+  [[ "$failures" -eq 0 ]] || die "$failures metadata verification check(s) failed"
+  echo "metadata verification passed" >&2
+}
+
 if [[ "$METADATA_ONLY" == "true" ]]; then
   [[ -n "$API_KEY" ]] || die "--metadata-only requires an authenticated Site; set CRESAONE_API_KEY or ~/.cresaone/credentials"
   if ! has_viewer_fields && [[ -z "$TTL" && "$SPA_MODE" != "true" && -z "$TAGS_JSON" ]]; then
@@ -223,7 +401,13 @@ if [[ "$METADATA_ONLY" == "true" ]]; then
   fi
   patch_metadata "$SLUG"
   apply_tags "$SLUG" "$CLIENT_HEADER_VALUE"
-  SITE_URL="https://$SLUG.cresa.one"
+  [[ "$VERIFY" -eq 0 ]] || verify_site_metadata "$SLUG"
+  site_details=$(fetch_site_details "$SLUG")
+  if printf '%s' "$site_details" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+    die "Site URL fetch failed: $(api_error_message "$site_details" "unexpected response")"
+  fi
+  SITE_URL=$(printf '%s' "$site_details" | "$JQ_BIN" -r '.siteUrl // empty')
+  [[ -n "$SITE_URL" ]] || die "Site details returned no siteUrl"
   echo "$SITE_URL"
   echo "" >&2
   echo "publish_result.site_url=$SITE_URL" >&2
@@ -267,6 +451,10 @@ if [[ -n "$FROM_DRIVE" ]]; then
   DRIVE_VERSION_OUT=$(echo "$RESPONSE" | "$JQ_BIN" -r '.driveVersionId')
   echo "$SITE_URL"
   apply_tags "$OUT_SLUG" "$CLIENT_HEADER_VALUE"
+  if [[ "$VERIFY" -eq 1 ]]; then
+    echo "verification note: Drive publishes have no local file tree; verifying requested metadata only" >&2
+    verify_site_metadata "$OUT_SLUG"
+  fi
   echo "" >&2
   echo "publish_result.site_url=$SITE_URL" >&2
   echo "publish_result.slug=$OUT_SLUG" >&2
@@ -344,7 +532,7 @@ guess_content_type() {
     midi|mid) echo "audio/midi" ;;
     caf)      echo "audio/x-caf" ;;
     weba)     echo "audio/webm" ;;
-    xml)      echo "application/xml" ;;
+    xml)      echo "application/xml; charset=utf-8" ;;
     woff2)    echo "font/woff2" ;;
     woff)     echo "font/woff" ;;
     ttf)      echo "font/ttf" ;;
@@ -380,7 +568,7 @@ elif [[ -d "$TARGET" ]]; then
     rel="${f#$TARGET/}"
     [[ "$rel" == ".DS_Store" ]] && continue
     [[ "$(basename "$rel")" == ".DS_Store" ]] && continue
-    [[ "$rel" == ".cresaone/fork-meta.json" ]] && continue
+    [[ "$rel" == .cresaone/* ]] && continue
     sz=$(wc -c < "$f" | tr -d ' ')
     ct=$(guess_content_type "$f")
     h=$(compute_sha256 "$f")
@@ -395,6 +583,84 @@ fi
 
 file_count=$(echo "$FILES_JSON" | "$JQ_BIN" 'length')
 [[ "$file_count" -gt 0 ]] || die "no files found"
+
+verify_live_files() {
+  local slug="$1"
+  local site_url="$2"
+  local selected selected_count failures=0 index=0
+  local temp_dir file_path expected_type local_file encoded_path verify_url headers_file body_file
+  local http_code actual_type local_hash live_hash local_size live_size normalized_expected normalized_actual
+
+  if [[ -n "$API_KEY" ]]; then
+    local access_response access_mode
+    access_response=$(curl -sS -X GET "$BASE_URL/api/v1/publish/$slug/access" \
+      -H "authorization: Bearer $API_KEY" \
+      -H "x-cresaone-client: $CLIENT_HEADER_VALUE")
+    if ! printf '%s' "$access_response" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
+      access_mode=$(printf '%s' "$access_response" | "$JQ_BIN" -r '.access.mode // "anyone_with_link"')
+      if [[ "$access_mode" != "anyone_with_link" ]]; then
+        die "publish succeeded, but live byte verification is unavailable for $access_mode Sites; rerun with --no-verify and verify owner metadata separately"
+      fi
+    fi
+  fi
+
+  selected=$(printf '%s' "$FILES_JSON" | "$JQ_BIN" -c --argjson limit "$VERIFY_LIMIT" --arg og "${OG_IMAGE_PATH#/}" '
+    ([.[0:$limit][]] + [.[] | select(
+      ((.contentType // "") | startswith("text/html")) or
+      ($og != "" and .path == $og)
+    )]) | unique_by(.path)
+  ')
+  selected_count=$(printf '%s' "$selected" | "$JQ_BIN" 'length')
+  if [[ "$selected_count" -lt "$file_count" ]]; then
+    echo "verifying $selected_count of $file_count files (first $VERIFY_LIMIT plus all HTML and selected OG image)..." >&2
+  else
+    echo "verifying $selected_count live files..." >&2
+  fi
+
+  temp_dir=$(mktemp -d)
+  while [[ "$index" -lt "$selected_count" ]]; do
+    file_path=$(printf '%s' "$selected" | "$JQ_BIN" -r ".[$index].path")
+    expected_type=$(printf '%s' "$selected" | "$JQ_BIN" -r ".[$index].contentType // \"application/octet-stream\"")
+    local_file=$(printf '%s' "$FILE_MAP" | "$JQ_BIN" -r --arg path "$file_path" '.[$path] // empty')
+    headers_file="$temp_dir/headers-$index"
+    body_file="$temp_dir/body-$index"
+    encoded_path=$(printf '%s' "$file_path" | "$JQ_BIN" -sRr @uri | sed 's/%2F/\//g')
+    verify_url="${site_url%/}/$encoded_path?cresaverify=$(date +%s)-$index"
+    http_code=$(curl -sS -D "$headers_file" -o "$body_file" -w '%{http_code}' "$verify_url" || true)
+    actual_type=$(awk 'tolower($0) ~ /^content-type:/ { sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, ""); value=$0 } END { print value }' "$headers_file")
+
+    if [[ ! -f "$local_file" || ! "$http_code" =~ ^[0-9]{3}$ || "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+      echo "verification failed: $file_path HTTP ${http_code:-unknown}" >&2
+      failures=$((failures + 1))
+      index=$((index + 1))
+      continue
+    fi
+
+    local_hash=$(compute_sha256 "$local_file")
+    live_hash=$(compute_sha256 "$body_file")
+    local_size=$(wc -c < "$local_file" | tr -d ' ')
+    live_size=$(wc -c < "$body_file" | tr -d ' ')
+    normalized_expected=$(printf '%s' "$expected_type" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+    normalized_actual=$(printf '%s' "$actual_type" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+
+    if [[ "$local_hash" != "$live_hash" || "$local_size" != "$live_size" ]]; then
+      echo "verification failed: $file_path" >&2
+      echo "  local hash=$local_hash size=$local_size" >&2
+      echo "  live  hash=$live_hash size=$live_size" >&2
+      failures=$((failures + 1))
+    fi
+    if [[ "$normalized_expected" != "$normalized_actual" ]]; then
+      echo "verification failed: $file_path content-type expected=$expected_type actual=${actual_type:-missing}" >&2
+      failures=$((failures + 1))
+    fi
+    index=$((index + 1))
+  done
+  rm -rf "$temp_dir"
+
+  [[ "$failures" -eq 0 ]] || die "$failures live verification check(s) failed"
+  echo "live file verification passed" >&2
+  verify_site_metadata "$slug"
+}
 
 # Build request body
 BODY=$(echo "$FILES_JSON" | "$JQ_BIN" '{files: .}')
@@ -519,8 +785,6 @@ if echo "$FIN_RESPONSE" | "$JQ_BIN" -e '.error' >/dev/null 2>&1; then
   die "finalize failed: $err"
 fi
 
-apply_tags "$OUT_SLUG" "$CLIENT_HEADER_VALUE"
-
 # Save state
 mkdir -p "$STATE_DIR"
 if [[ -f "$STATE_FILE" ]]; then
@@ -540,7 +804,15 @@ RESPONSE_EXPIRES=$(echo "$RESPONSE" | "$JQ_BIN" -r '.expiresAt // empty')
 [[ -n "$RESPONSE_EXPIRES" ]] && entry=$(echo "$entry" | "$JQ_BIN" --arg v "$RESPONSE_EXPIRES" '.expiresAt = $v')
 
 STATE=$(echo "$STATE" | "$JQ_BIN" --arg slug "$OUT_SLUG" --argjson e "$entry" '.publishes[$slug] = $e')
-echo "$STATE" | "$JQ_BIN" '.' > "$STATE_FILE"
+save_state_json "$STATE"
+
+apply_tags "$OUT_SLUG" "$CLIENT_HEADER_VALUE"
+
+if [[ "$VERIFY" -eq 1 ]]; then
+  verify_live_files "$OUT_SLUG" "$SITE_URL"
+else
+  echo "post-publish verification skipped (--no-verify)" >&2
+fi
 
 # Output
 echo "$SITE_URL"

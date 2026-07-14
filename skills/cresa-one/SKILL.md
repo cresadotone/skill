@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.20.0**
+**Skill version: 1.21.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -79,12 +79,14 @@ If the docs fetch fails or times out, continue with the local skill and live API
 ## Requirements
 
 - Required binaries: `curl`, `file`, `jq`
+- Optional OG generator runtime: `uv` or Python 3.10+ with Pillow
 - Optional environment variable: `$CRESAONE_API_KEY`
 - Optional Drive token variable: `$CRESAONE_DRIVE_TOKEN`
 - Optional credentials file: `~/.cresaone/credentials`
 - Bundled helpers:
   - `./scripts/publish.sh` for publishing sites
   - `./scripts/drive.sh` for private Drive storage
+  - `./scripts/og-image.py` for Open Graph image candidates
 
 ## Create a site
 
@@ -130,15 +132,29 @@ Fast path for file + metadata + tags updates:
   --client claude
 ```
 
-Use this one command when files changed. It creates/updates the Site, uploads files with correct content types, finalizes, patches viewer metadata, and replaces tags. Use raw API calls only when the helper does not cover the task.
+Use this one command when files changed. It creates/updates the Site, uploads files with correct content types, finalizes, saves recovery state, patches tags, then verifies live bytes, sizes, content types, and requested owner metadata. Any mismatch exits non-zero with a per-file report.
 
-Open Graph image recipe:
+## Generate an OG image
 
-1. Render a 1200x630 PNG such as `og.png`.
-2. Put it beside `index.html` in the published directory.
-3. Reference it in HTML with an absolute URL after publish.
-4. Set cresa.one viewer metadata with `--og-image-path /og.png`.
-5. Verify `https://{slug}.cresa.one/og.png` returns an image.
+Generate three 1200x630 candidates plus 360x189 review thumbnails:
+
+```bash
+uv run ./scripts/og-image.py \
+  --title "Ada Lovelace" \
+  --subtitle "AI Systems Lead" \
+  --label "EXECUTIVE PROFILE" \
+  --signal "AGENTIC AI / DATA PLATFORMS" \
+  --footer "ada-lovelace.cresa.one" \
+  --photo ./assets/ada.jpg \
+  --layout all \
+  --out ./og-options
+```
+
+`--photo` is optional and must point to the correct user-provided identity image; never substitute a stock or wrong-person image. Inspect each `_thumb.png` at actual size, choose one, then copy it to `{site-dir}/og.png`. Publish with `--og-image-path /og.png --verify`.
+
+Typography defaults enforce 18px label, 20px signal, and 18px footer floors. `--scale` may increase them but refuses values below `1.0`. Output is PNG only. Fonts resolve from installed system fonts with a scalable Pillow fallback; no font binaries are bundled.
+
+Without `uv`, create a Python 3.10+ virtual environment, install Pillow, then run `python ./scripts/og-image.py` with the same flags.
 
 For a reusable design pattern, see `examples/terminal-instrument/`. It includes a shared app shell, config-driven runtime, generator, and optional Playwright-based OG image generator. Treat it as an example for creating consistent app families, not as required publishing infrastructure.
 
@@ -217,14 +233,48 @@ Manifest `contentType` reports what was stored during upload. If it is wrong, re
 ## Update an existing site
 
 ```bash
-./scripts/publish.sh {file-or-dir} --slug {slug}
+./scripts/publish.sh {file-or-dir} --slug {slug} --verify
 ```
 
-The script auto-loads the `claimToken` from `.cresaone/state.json` when updating anonymous sites. Pass `--claim-token {token}` to override.
+Verification is on by default; `--verify` makes intent explicit. A cache-busting request compares live bytes and content types against the local manifest. For more than 50 files, verification checks the first 50 plus every HTML file and the selected OG image. Use `--no-verify` only for deliberate large publishes or protected Sites, whose public host correctly returns an access gate instead of source bytes.
+
+The script saves `.cresaone/state.json` before verification so a successful anonymous publish retains its one-time claim token even if verification catches a mismatch. It excludes the full `.cresaone/` directory from uploads. Pass `--claim-token {token}` to override auto-loaded anonymous state.
 
 Authenticated updates require a saved API key.
 
 Signed-in users also have public profiles. Agents can help users show or hide Sites on their profile and manage profile settings through the API documented at https://cresa.one/docs#profile.
+
+## Rename a Site
+
+```bash
+./scripts/publish.sh --slug {old-slug} --rename-to {new-slug}
+```
+
+Rename is owner-only. Success moves any matching local state entry and prints both URLs. The old `{slug}.cresa.one` host returns 404 immediately: shared links and cached previews break, and another user can claim the freed slug. To verify content on the new host, republish the local directory with `--slug {new-slug} --verify`.
+
+## Check or suggest a slug
+
+Both helpers require authentication:
+
+```bash
+./scripts/publish.sh --check-slug {preferred-slug}
+./scripts/publish.sh --suggest-slug
+```
+
+`--check-slug` prints `{slug, available, reason}` JSON and exits non-zero when invalid or taken. Check before promising a preferred URL. `--suggest-slug` prints a fresh available `word-word-aDaD` slug. Anonymous publishing still receives a generated slug during create; these owner helpers are not anonymous endpoints.
+
+## Change Site status
+
+Set an owned Site to `published`, `pending`, `archived`, or `disabled`:
+
+```bash
+curl -sS -X POST "https://cresa.one/api/v1/publish/{slug}/status" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"status":"archived"}'
+```
+
+Response shape: `{"slug":"{slug}","status":"archived"}`.
 
 ## Site access control
 
@@ -234,7 +284,36 @@ A Site uses one access mode at a time:
 - **password**: visitors must enter a shared password.
 - **restricted**: invite-only; only verified email addresses or email domains the owner allows can view.
 
-Manage access with `GET`/`PATCH /api/v1/publish/{slug}/access` (passwords via the metadata endpoint). Restricted access requires a claimed Site. The PATCH replaces the full allowlists — read, merge, then write. Before working with access control, read the current docs:
+Read current policy before changing it:
+
+```bash
+curl -sS "https://cresa.one/api/v1/publish/{slug}/access" \
+  -H "authorization: Bearer $CRESAONE_API_KEY"
+```
+
+Set restricted access with complete merged allowlists:
+
+```bash
+curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/access" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"mode":"restricted","allowedEmails":["person@example.com"],"allowedDomains":["example.org"]}'
+```
+
+Mode-bearing PATCH requests replace full allowlists — read, merge, then write. Restricted access requires a claimed Site. Passwords use the metadata endpoint.
+
+Protected Sites keep previews private by default. Toggle only public link previews without changing mode, passwords, allowlists, or viewer sessions:
+
+```bash
+curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/access" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"publicPreviewEnabled":true}'
+```
+
+Enabled previews expose only owner-approved title, optional description, and exact selected PNG/JPEG/WebP/GIF. Other files stay gated. External services may retain cached previews after disabling.
+
+Before access-control work, read current docs:
 
 → **https://cresa.one/docs#access-control**
 
@@ -285,21 +364,13 @@ Use `ifNoneMatch:"*"` for create-only writes. Use `ifMatch:"{etag}"` when replac
 
 ## Verify a publish
 
-After publishing polished apps:
+Normal local publishes verify automatically. Explicit command:
 
 ```bash
-curl -fsSI "https://{slug}.cresa.one/og.png" | grep -i '^content-type:'
-curl -sS "https://cresa.one/api/v1/publish/{slug}" \
-  -H "authorization: Bearer $CRESAONE_API_KEY" |
-  jq '{viewer,tags,manifest}'
+./scripts/publish.sh {site-dir} --slug {slug} --verify
 ```
 
-Check:
-
-- `.viewer.title`, `.viewer.description`, and `.viewer.ogImagePath` are present.
-- `.viewer.ogImagePath == "/og.png"`.
-- `.tags` contains expected normalized tags.
-- `manifest[]` has correct content types such as `text/html; charset=utf-8` and `image/png`.
+The helper adds `?cresaverify=...` to bypass the public 60-second edge cache. Hash, size, HTTP, or content-type mismatches fail loudly. Authenticated runs also check requested `viewer.title`, `viewer.description`, `viewer.ogImagePath`, and normalized tags through `GET /api/v1/publish/{slug}`. Drive publishes lack a local tree, so only requested owner metadata is verified.
 
 ## Client attribution
 
@@ -405,6 +476,11 @@ For Drives:
 | `--description {text}` | Viewer description                            |
 | `--og-image-path {path}` | Viewer/Open Graph image path, e.g. `/og.png` |
 | `--metadata-only`      | Patch viewer metadata, TTL, SPA mode, or tags without uploading files |
+| `--verify`             | Verify live files and requested metadata (default) |
+| `--no-verify`          | Skip post-publish verification |
+| `--rename-to {slug}`   | Rename the authenticated Site selected by `--slug` |
+| `--check-slug {slug}`  | Print availability JSON; non-zero when unavailable |
+| `--suggest-slug`       | Print a fresh available slug (authenticated only) |
 | `--ttl {seconds}`      | Set expiry (authenticated only)               |
 | `--client {name}`      | Agent name for attribution (e.g. `cursor`)    |
 | `--tags {json-array}`  | Replace Site tags after publish; requires authentication |

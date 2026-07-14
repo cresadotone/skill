@@ -13,7 +13,7 @@ description: >
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
   site with only certain people".
-version: 1.21.0
+version: 1.22.0
 author: cresa.one
 license: MIT
 prerequisites:
@@ -91,6 +91,14 @@ bash "$PUBLISH" {file-or-dir} --client hermes
 
 Outputs the live URL (e.g. `https://bright-anchor-v7w4.cresa.one/`).
 
+To create a new Site at a chosen slug in one step (authenticated only):
+
+```bash
+./scripts/publish.sh {file-or-dir} --create --slug {desired-slug}
+```
+
+`--create` forces `POST /api/v1/publish` instead of an update, and the requested slug is claimed atomically at creation. The server validates DNS-label rules (3–63 chars, lowercase alphanumeric and hyphens, no leading/trailing or consecutive hyphens, not reserved) and returns 409 when taken, 422 when invalid — no typo Site is created. Use plain `--slug` (without `--create`) only to update an existing Site; use `--check-slug` first when unsure whether the name is free.
+
 Under the hood this is a three-step flow: create/update -> upload files -> finalize. A site is not live until finalize succeeds.
 
 Without an API key this creates an **anonymous site** that expires in 24 hours.
@@ -111,7 +119,7 @@ For polished apps, calculators, dashboards, or documents:
 - Use `--og-image-path /og.png` for cresa.one viewer metadata. This is a Site-relative path, not a Drive path.
 - Use absolute Open Graph URLs inside HTML, for example `<meta property="og:image" content="https://{slug}.cresa.one/og.png">`.
 - Pass `--title` and `--description` for dashboard/UI labels and share-preview copy.
-- Pass `--slug` for stable permanent URLs when updating a known Site.
+- Pass `--slug` for stable permanent URLs when updating a known Site, or `--create --slug` to claim a chosen slug for a new Site.
 - Pass `--tags '["calculator","cre"]'` for authenticated Site organization.
 - Verify local rendering before publish, especially mobile width, reduced-motion behavior, copy/CSV/share actions, and console errors.
 
@@ -230,7 +238,7 @@ bash "$PUBLISH" --check-slug {preferred-slug} --client hermes
 bash "$PUBLISH" --suggest-slug --client hermes
 ```
 
-Rename moves matching local state and warns that the old host immediately 404s, breaking shared links and cached previews while freeing the old slug. `--check-slug` prints JSON and exits non-zero when unavailable. `--suggest-slug` prints an available friendly slug. Both slug helpers require authentication; anonymous create still receives a generated slug.
+Rename moves matching local state and warns that the old host immediately 404s, breaking shared links and cached previews while freeing the old slug. `--check-slug` prints JSON and exits non-zero when unavailable. `--suggest-slug` prints an available friendly slug. Both slug helpers require authentication; anonymous create still receives a generated slug. Once a name checks out, claim it directly with `--create --slug {name}` — no rename step needed.
 
 ## Change Site status
 

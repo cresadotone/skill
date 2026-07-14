@@ -80,6 +80,10 @@ case "$url" in
     ;;
   *'/access') emit_json "{\"access\":{\"mode\":\"${MOCK_ACCESS_MODE:-anyone_with_link}\"}}" ;;
   *'/tags') emit_json '{"slug":"demo","tags":["cre"]}' ;;
+  'https://mock.test/api/v1/publish')
+    slug=$(printf '%s' "$data" | jq -r '.slug // "random-name-a1b2"')
+    emit_json "{\"slug\":\"$slug\",\"siteUrl\":\"https://$slug.mock.test\",\"status\":\"pending\",\"upload\":{\"versionId\":\"ver_1\",\"finalizeUrl\":\"https://mock.test/finalize\",\"uploads\":[{\"path\":\"index.html\",\"url\":\"https://upload.test/index.html\",\"headers\":{}}],\"skipped\":[]}}"
+    ;;
   *'/api/v1/publish/demo')
     if [[ "$method" == GET ]]; then
       emit_json '{"slug":"demo","siteUrl":"https://demo.mock.test","viewer":{"title":"Test Site"},"tags":["cre"],"manifest":[{"path":"index.html","size":18,"contentType":"text/html; charset=utf-8"}]}'
@@ -119,6 +123,17 @@ run_publish() {
       MOCK_CONTENT_TYPE="${MOCK_CONTENT_TYPE:-text/html; charset=utf-8}" \
       MOCK_ACCESS_MODE="${MOCK_ACCESS_MODE:-anyone_with_link}" \
       "$PUBLISH_SH" --base-url https://mock.test --allow-noncresaone-base-url "$@"
+  )
+}
+
+run_publish_noauth() {
+  (
+    cd "$TEST_ROOT/site"
+    PATH="$TEST_ROOT/bin:$PATH" \
+      CRESAONE_API_KEY="" \
+      HOME="$TEST_ROOT/fakehome" \
+      MOCK_SITE_DIR="$TEST_ROOT/site" \
+      "$PUBLISH_SH" --base-url https://mock.test "$@"
   )
 }
 
@@ -171,6 +186,28 @@ assert_contains "$TEST_ROOT/stderr" "content-type expected=text/html; charset=ut
 
 MOCK_CORRUPT=1 assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --no-verify
 assert_contains "$TEST_ROOT/stderr" "verification skipped"
+
+assert_status 1 run_publish --create --rename-to foo
+assert_contains "$TEST_ROOT/stderr" "--create cannot be combined"
+
+assert_status 1 run_publish --create --from-drive drv_1
+assert_contains "$TEST_ROOT/stderr" "implicit for --from-drive"
+
+assert_status 1 run_publish "$TEST_ROOT/site" --create --slug fresh-name --claim-token nope
+assert_contains "$TEST_ROOT/stderr" "--create cannot be combined with --claim-token"
+
+assert_status 1 run_publish_noauth "$TEST_ROOT/site" --create --slug fresh-name --no-verify
+assert_contains "$TEST_ROOT/stderr" "requires authentication"
+
+assert_status 0 run_publish "$TEST_ROOT/site" --create --slug fresh-name --no-verify
+assert_contains "$TEST_ROOT/stdout" "https://fresh-name.mock.test"
+assert_contains "$TEST_ROOT/stderr" "publish_result.action=create"
+jq -e '.publishes["fresh-name"].siteUrl == "https://fresh-name.mock.test"' \
+  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "create-with-slug state was not saved"
+
+assert_status 0 run_publish "$TEST_ROOT/site" --create --no-verify
+assert_contains "$TEST_ROOT/stdout" "https://random-name-a1b2.mock.test"
+assert_contains "$TEST_ROOT/stderr" "publish_result.action=create"
 
 [[ $(find "$TEST_ROOT/site" -type f | wc -l | tr -d ' ') -ge 2 ]] || fail "test fixture missing state file"
 assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --no-verify

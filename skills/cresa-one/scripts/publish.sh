@@ -9,6 +9,7 @@ if [[ -n "${CRESAONE_API_KEY:-}" ]]; then
   API_KEY_SOURCE="env"
 fi
 ALLOW_NON_CRESAONE_BASE_URL=0
+CREATE=0
 SLUG=""
 CLAIM_TOKEN=""
 TITLE=""
@@ -35,7 +36,9 @@ Usage: publish.sh [file-or-dir] [options]
 
 Options:
   --api-key <key>         API key (or set $CRESAONE_API_KEY)
-  --slug <slug>           Update existing publish
+  --slug <slug>           Update existing publish (or requested slug with --create)
+  --create                Create a new Site; with --slug, claim that slug
+                          (authenticated only; fails when taken or invalid)
   --claim-token <token>   Claim token for anonymous updates
   --title <text>          Viewer title
   --description <text>    Viewer description
@@ -85,6 +88,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --api-key)      require_flag_value "$1" "${2:-}"; API_KEY="$2"; API_KEY_SOURCE="flag"; shift 2 ;;
     --slug)         require_flag_value "$1" "${2:-}"; SLUG="$2"; shift 2 ;;
+    --create)       CREATE=1; shift ;;
     --claim-token)  require_flag_value "$1" "${2:-}"; CLAIM_TOKEN="$2"; shift 2 ;;
     --title)        require_flag_value "$1" "${2:-}"; TITLE="$2"; shift 2 ;;
     --description)  require_flag_value "$1" "${2:-}"; DESCRIPTION="$2"; shift 2 ;;
@@ -115,6 +119,12 @@ action_count=0
 [[ -n "$CHECK_SLUG" ]] && action_count=$((action_count + 1))
 [[ "$SUGGEST_SLUG" -eq 1 ]] && action_count=$((action_count + 1))
 [[ "$action_count" -le 1 ]] || die "choose only one of --metadata-only, --rename-to, --check-slug, or --suggest-slug"
+
+if [[ "$CREATE" -eq 1 ]]; then
+  [[ "$action_count" -eq 0 ]] || die "--create cannot be combined with --metadata-only, --rename-to, --check-slug, or --suggest-slug"
+  [[ -z "$FROM_DRIVE" ]] || die "--create is implicit for --from-drive; pass --from-drive --slug directly"
+  [[ -z "$CLAIM_TOKEN" ]] || die "--create cannot be combined with --claim-token"
+fi
 
 if [[ -n "$RENAME_TO" ]]; then
   [[ -n "$SLUG" ]] || die "--rename-to requires --slug <old-slug>"
@@ -420,7 +430,7 @@ fi
 
 # Auto-load claim token from state file for slug updates (server uses it only for
 # anonymous sites; harmless when an API key is also present).
-if [[ -n "$SLUG" && -z "$CLAIM_TOKEN" && -f "$STATE_FILE" ]]; then
+if [[ "$CREATE" -eq 0 && -n "$SLUG" && -z "$CLAIM_TOKEN" && -f "$STATE_FILE" ]]; then
   CLAIM_TOKEN=$("$JQ_BIN" -r --arg s "$SLUG" '.publishes[$s].claimToken // empty' "$STATE_FILE" 2>/dev/null || true)
 fi
 
@@ -670,11 +680,16 @@ if [[ -n "$TTL" ]]; then
 fi
 
 if has_viewer_fields; then
-  viewer=$(build_viewer_json "$SLUG")
+  # New Sites have no existing viewer metadata to merge, so skip the GET.
+  if [[ "$CREATE" -eq 1 ]]; then
+    viewer=$(build_viewer_json "")
+  else
+    viewer=$(build_viewer_json "$SLUG")
+  fi
   BODY=$(echo "$BODY" | "$JQ_BIN" --argjson v "$viewer" '.viewer = $v')
 fi
 
-if [[ -n "$CLAIM_TOKEN" && -n "$SLUG" ]]; then
+if [[ "$CREATE" -eq 0 && -n "$CLAIM_TOKEN" && -n "$SLUG" ]]; then
   BODY=$(echo "$BODY" | "$JQ_BIN" --arg ct "$CLAIM_TOKEN" '.claimToken = $ct')
 fi
 
@@ -683,7 +698,14 @@ if [[ "$SPA_MODE" == "true" ]]; then
 fi
 
 # Determine endpoint and method
-if [[ -n "$SLUG" ]]; then
+if [[ "$CREATE" -eq 1 ]]; then
+  if [[ -n "$SLUG" ]]; then
+    require_owner_auth "--create --slug"
+    BODY=$(echo "$BODY" | "$JQ_BIN" --arg s "$SLUG" '.slug = $s')
+  fi
+  URL="$BASE_URL/api/v1/publish"
+  METHOD="POST"
+elif [[ -n "$SLUG" ]]; then
   URL="$BASE_URL/api/v1/publish/$SLUG"
   METHOD="PUT"
 else
@@ -830,7 +852,7 @@ if [[ -n "$RESPONSE_CLAIM_URL" && "$RESPONSE_CLAIM_URL" == https://* ]]; then
 fi
 
 ACTION="create"
-if [[ -n "$SLUG" ]]; then
+if [[ "$CREATE" -eq 0 && -n "$SLUG" ]]; then
   ACTION="update"
 fi
 

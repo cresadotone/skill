@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.23.0**
+**Skill version: 1.24.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -42,6 +42,32 @@ Every fallback install/update also packages the installed skill into portable ar
 - `cresa-one-{version}.zip`
 
 When installer output includes `present files to the user`, present files to the user using the local environment's file presentation/attachment mechanism. These archives are for quick import into apps such as Claude Desktop, Codex, and other skill-compatible clients.
+
+## Version check and self-update (every use)
+
+At the first cresa.one skill use in a conversation, check for updates before starting heavy work:
+
+```bash
+curl -fsS --max-time 3 https://cresa.one/api/skill/version
+```
+
+Compare the returned `version` to the **Skill version** at the top of this file. If the fetch fails or times out, skip silently and continue — never block the user's task on the check, and never repeat the check within the same conversation.
+
+If a newer version exists, tell the user their installed version, the latest version, and the changelog, then **ask whether to update now**. If they decline, continue with the task and do not ask again this conversation.
+
+If they accept, detect the current environment and update accordingly:
+
+1. **Claude Code or another CLI agent on the user's machine** (shell access and a writable `$HOME`, e.g. `~/.claude` exists):
+   - Ask whether to update the **global** skill (`~/.claude/skills/cresa-one`), the **project-level** skill (`./.claude/skills/cresa-one` in the current repo), or both.
+   - Global, preferred: `npx skills add cresadotone/skill --skill cresa-one -g` — the skills CLI also links the skill into the other agent directories it manages.
+   - Global fallback (no `npx`): `curl -fsSL https://cresa.one/install.sh | bash`, then mirror the skills-CLI linking behavior: for each other agent skills directory that **already exists** (for example `~/.codex/skills`, `~/.cursor/skills`, `~/.gemini/skills`, `~/.config/opencode/skills`), create or refresh a `cresa-one` symlink pointing at `~/.claude/skills/cresa-one`. Only link into directories that already exist — never create another agent's config tree, and never overwrite a real (non-symlink) directory.
+   - Project-level: `npx skills add cresadotone/skill --skill cresa-one` (repo-pinned), or copy the updated global bundle into `./.claude/skills/cresa-one/`.
+   - After updating, re-read the new `SKILL.md` before continuing the task.
+2. **Claude Desktop, Claude on the web (claude.ai), or the mobile apps** (the skill was imported as an uploaded archive; there is no persistent local install to overwrite):
+   - If the sandbox has network access, build the latest portable archive: download `SKILL.md`, `scripts/publish.sh`, `scripts/drive.sh`, `scripts/og-image.py`, and every `templates/` file from `https://raw.githubusercontent.com/cresadotone/skill/main/cresa-one/`, zip them under a top-level `cresa-one/` folder as `cresa-one-{latest}.zip`, and present the file to the user.
+   - Tell the user to replace the skill themselves (agents cannot swap an uploaded skill): Settings → Capabilities → Skills → remove the old cresa-one → upload the new archive.
+   - On mobile, or when the sandbox has no network or archiving capability, share the commands to run on a computer instead: `npx skills add cresadotone/skill --skill cresa-one -g` or `curl -fsSL https://cresa.one/install.sh | bash`.
+3. **Unknown environment**: ask the user where the skill is running, then follow the matching path above.
 
 ## Current docs
 

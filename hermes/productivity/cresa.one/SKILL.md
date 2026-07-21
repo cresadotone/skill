@@ -13,7 +13,7 @@ description: >
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
   site with only certain people".
-version: 1.23.0
+version: 1.24.0
 author: cresa.one
 license: MIT
 prerequisites:
@@ -36,6 +36,26 @@ Use cresa.one for two jobs:
 - **Drives**: store private agent files in cloud folders.
 
 Every Site has access control: public link (default), password, or restricted invite-only access.
+
+## Version check and self-update (every use)
+
+At the first cresa.one skill use in a conversation, check for updates before starting heavy work:
+
+```bash
+curl -fsS --max-time 3 https://cresa.one/api/skill/version
+```
+
+Compare the returned `version` to the `version` in this file's frontmatter. If the fetch fails or times out, skip silently and continue — never block the user's task on the check, and never repeat the check within the same conversation.
+
+If a newer version exists, tell the user their installed version, the latest version, and the changelog, then **ask whether to update now**. If they decline, continue with the task and do not ask again this conversation.
+
+If they accept, update the Hermes-managed install:
+
+```bash
+hermes skills install cresadotone/skill/hermes/productivity/cresa.one
+```
+
+or via the well-known endpoint: `hermes skills install well-known:https://cresa.one/.well-known/skills/cresa.one`. If the user also keeps a Claude Code global install (`~/.claude/skills/cresa-one` exists), offer to refresh it too with `npx skills add cresadotone/skill --skill cresa-one -g` (preferred) or `curl -fsSL https://cresa.one/install.sh | bash`. After updating, re-read the new skill file before continuing the task.
 
 ## Current docs
 

@@ -13,7 +13,7 @@ description: >
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
   site with only certain people".
-version: 1.22.0
+version: 1.23.0
 author: cresa.one
 license: MIT
 prerequisites:
@@ -81,6 +81,7 @@ If the docs fetch fails or times out, continue with the local skill and live API
   - `${HERMES_SKILL_DIR}/scripts/publish.sh` for publishing sites
   - `${HERMES_SKILL_DIR}/scripts/drive.sh` for private Drive storage
   - `${HERMES_SKILL_DIR}/scripts/og-image.py` for Open Graph image candidates
+  - `${HERMES_SKILL_DIR}/templates/` for the house design system + scaffolding templates (see below)
 
 ## Create a site
 
@@ -109,6 +110,19 @@ With a saved API key, the site is permanent.
 You can also publish raw files without any HTML. Single files get a rich auto-viewer (images, PDF, video, audio). Multiple files get an auto-generated directory listing with folder navigation and an image gallery.
 
 The helpers set `Content-Type` from file extension and fall back to `file(1)`. Common supported types include HTML/CSS/JS/JSON, Markdown/text/CSV/YAML/TOML, images (`png`, `jpg`, `webp`, `avif`, `heic`, `tiff`, `svg`), video (`mp4`, `mov`, `webm`, `ogv`), audio (`mp3`, `wav`, `flac`, `aiff`, `alac`, `m4a`, `aac`, `ogg`, `oga`, `opus`, `midi`, `caf`, `weba`), fonts (`woff2`, `woff`, `ttf`, `otf`), WebAssembly, web manifests, archives, GLTF/GLB/USDZ/STL models, Parquet, and SQLite.
+
+## Scaffold on-brand apps and pages
+
+The skill bundles the house design system and two production-ready single-file templates under `${HERMES_SKILL_DIR}/templates/`. Use them whenever building a new app, dashboard, tool, or decision page so output matches the house style instead of an invented one.
+
+- `templates/DESIGN.md` — the **SF Ownership Desk** design system: absolute-black background, near-black surfaces, graphite hairlines, signal-white accent, three-level neutral text, Geist Sans / Geist Mono / Geist Pixel Square typography, component anatomy, layout, and responsive rules. Read it before designing any new surface.
+- `templates/app-template.html` — self-contained app skeleton (fonts embedded): mono default + 10 switchable themes, ⌘K command bar with live theme preview, sortable table + grouped board view, KPI tiles, filter chips, record drawer, confirm modal, toasts, full keyboard layer, CSV export, localStorage state.
+- `templates/plan-template.html` — interactive plan/decision page (approve / reject / edit cards, Submit-to-listener with JSON download fallback).
+- `templates/PLAN-DESIGN.md` — the plan-page contract (`PLAN_ITEMS` shape, theme, interactivity, listener payload).
+- `templates/plans.config.example.json` — example per-project accent + sequence config for plan pages.
+- `templates/README.md` — step-by-step scaffolding instructions and placeholder reference.
+
+App scaffold in short: copy `app-template.html` to `{site-dir}/index.html`, fill the `__APP_*__` placeholders, replace the `DATA` array (row shape documented inline), adjust `COLS`, then generate a matching `og.png` and publish. Do not hand-roll new shells or palettes when these templates apply.
 
 ## Rich static app publishing
 
@@ -139,6 +153,8 @@ bash "$PUBLISH" {site-dir} \
 Use this command when files changed. It uploads and finalizes, saves recovery state, patches tags, then verifies live bytes, sizes, content types, and requested owner metadata. Mismatches exit non-zero with per-file details.
 
 ## Generate an OG image
+
+Cards follow the same SF Ownership Desk design system as `templates/` output — absolute-black canvas, graphite hairlines, signal-white accents, square markers, mono metadata — so share previews match the apps they represent.
 
 ```bash
 uv run "${HERMES_SKILL_DIR}/scripts/og-image.py" \

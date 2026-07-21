@@ -49,6 +49,10 @@ Use the skill's `publish.sh --metadata-only --slug {slug}` helper, or `PATCH /ap
 
 The publish and Drive helpers preserve common web content types, including AVIF/WebP/HEIC/TIFF images, MP4/MOV/WebM video, FLAC/AIFF/ALAC/M4A/AAC/WAV/MP3/OGG/Opus/MIDI audio, fonts, WebAssembly, web manifests, archives, structured data, SQLite/parquet files, and glTF/GLB/USDZ/STL models.
 
+## Design system & templates
+
+- `cresa-one/templates/` - the SF Ownership Desk design system (`DESIGN.md`) plus production single-file templates: `app-template.html` (near-black mono app skeleton with themes, ⌘K command bar, table/board views, drawer, keyboard layer) and `plan-template.html` (interactive plan/decision page). The bundled `og-image.py` generates share cards in the same design language. See `cresa-one/templates/README.md` for scaffolding steps.
+
 ## Examples
 
 - `examples/terminal-instrument/` - optional pattern for consistent self-contained apps with a shared shell, config-driven runtime, and Open Graph image generator.

@@ -17,7 +17,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.24.0**
+**Skill version: 1.25.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -536,6 +536,24 @@ For Drives:
 | `--allow-noncresaone-base-url` | Allow sending auth to non-default `--base-url` |
 | `--api-key {key}`      | API key override (prefer credentials file)    |
 | `--spa`                | Enable SPA routing (serve index.html for unknown paths) |
+
+## Authenticated proxy routes
+
+Claimed password or restricted Sites can forward an exact path prefix to a public HTTPS upstream after viewer access succeeds. Store the upstream bearer as an origin-pinned service variable, then create the route:
+
+```bash
+curl -sS -X PUT "https://cresa.one/api/v1/me/variables/CLEANLIST_PROXY_ACCESS_TOKEN" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"value":"...","upstreamOrigin":"https://service.example.workers.dev"}'
+
+curl -sS -X POST "https://cresa.one/api/v1/publish/{slug}/proxy-routes" \
+  -H "authorization: Bearer $CRESAONE_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"pathPrefix":"/api","upstreamOrigin":"https://service.example.workers.dev","authVariableName":"CLEANLIST_PROXY_ACCESS_TOKEN"}'
+```
+
+List routes with `GET /api/v1/publish/{slug}/proxy-routes`; delete one with `DELETE /api/v1/publish/{slug}/proxy-routes/{routeId}`. The Site gate runs before upstream access. cresa.one strips viewer credentials, injects only the service-variable Bearer, blocks redirects, and never returns the variable value. The upstream must still reject direct unauthenticated requests.
 
 ## Beyond publish.sh
 

@@ -418,6 +418,13 @@ if [[ "$METADATA_ONLY" == "true" ]]; then
   fi
   SITE_URL=$(printf '%s' "$site_details" | "$JQ_BIN" -r '.siteUrl // empty')
   [[ -n "$SITE_URL" ]] || die "Site details returned no siteUrl"
+  RESPONSE_EXPIRES=$(printf '%s' "$site_details" | "$JQ_BIN" -r '.expiresAt // empty')
+  PERSISTENCE="unknown"
+  if [[ -n "$RESPONSE_EXPIRES" ]]; then
+    PERSISTENCE="expires_at"
+  elif printf '%s' "$site_details" | "$JQ_BIN" -e 'has("expiresAt") and .expiresAt == null' >/dev/null; then
+    PERSISTENCE="permanent"
+  fi
   echo "$SITE_URL"
   echo "" >&2
   echo "publish_result.site_url=$SITE_URL" >&2
@@ -425,6 +432,8 @@ if [[ "$METADATA_ONLY" == "true" ]]; then
   echo "publish_result.action=metadata" >&2
   echo "publish_result.auth_mode=authenticated" >&2
   echo "publish_result.api_key_source=$API_KEY_SOURCE" >&2
+  echo "publish_result.persistence=$PERSISTENCE" >&2
+  echo "publish_result.expires_at=$RESPONSE_EXPIRES" >&2
   exit 0
 fi
 

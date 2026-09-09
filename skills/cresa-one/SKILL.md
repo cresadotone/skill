@@ -505,8 +505,8 @@ For published sites:
 
 - Always share the `siteUrl` from the current script run.
 - Read and follow `publish_result.*` lines from script stderr to determine auth mode.
-- Use `publish_result.expires_at` for the exact returned expiry. `persistence=expires_at` means an expiry was returned; `permanent` means an authenticated Site has no expiry. If an anonymous response omits expiry, `persistence=unknown`: report that gap instead of inventing a deadline.
-- When `publish_result.auth_mode=authenticated`: tell the user the Site is saved to their account. Report a returned expiry when present; otherwise it is permanent. No claim URL is needed.
+- Use `publish_result.expires_at` for the exact returned expiry. `persistence=expires_at` means an expiry was returned; `permanent` means an authenticated Site has no expiry. When `persistence=unknown`, report the missing expiry information instead of inferring a deadline or permanence. Metadata-only updates report these fields from the freshly fetched Site details.
+- When `publish_result.auth_mode=authenticated`: tell the user the Site is saved to their account. Report the returned expiry when `persistence=expires_at`; describe it as permanent only when `persistence=permanent`. No claim URL is needed.
 - When `publish_result.auth_mode=anonymous`: report the returned Site expiry; 24 hours is the default, not an override of an explicit TTL. Share the claim URL (if `publish_result.claim_url` is non-empty and starts with `https://`) so they can keep it permanently. Warn that claim tokens are only returned once and cannot be recovered.
 - Never tell the user to inspect `.cresaone/state.json` for claim URLs or auth status.
 

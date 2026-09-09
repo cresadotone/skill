@@ -85,16 +85,23 @@ case "$url" in
     ;;
   *'/access') emit_json "{\"access\":{\"mode\":\"${MOCK_ACCESS_MODE:-anyone_with_link}\"}}" ;;
   *'/tags') emit_json '{"slug":"demo","tags":["cre"]}' ;;
+  *'/metadata')
+    if [[ -n "${MOCK_EXPECT_TTL:-}" ]]; then
+      printf '%s' "$data" | jq -e --argjson ttl "$MOCK_EXPECT_TTL" 'has("ttlSeconds") and .ttlSeconds == $ttl' >/dev/null || exit 71
+    fi
+    emit_json '{"success":true}'
+    ;;
   'https://mock.test/api/v1/publish')
     slug=$(printf '%s' "$data" | jq -r '.slug // "random-name-a1b2"')
     if [[ -n "${MOCK_EXPECT_TTL:-}" ]]; then
-      printf '%s' "$data" | jq -e --argjson ttl "$MOCK_EXPECT_TTL" '.ttlSeconds == $ttl' >/dev/null || exit 71
+      printf '%s' "$data" | jq -e --argjson ttl "$MOCK_EXPECT_TTL" 'has("ttlSeconds") and .ttlSeconds == $ttl' >/dev/null || exit 71
     fi
     emit_json "{\"slug\":\"$slug\",\"siteUrl\":\"https://$slug.mock.test\",\"status\":\"pending\",\"expiresAt\":\"${MOCK_EXPIRES_AT:-}\",\"upload\":{\"versionId\":\"ver_1\",\"finalizeUrl\":\"https://mock.test/finalize\",\"uploads\":[{\"path\":\"index.html\",\"url\":\"https://upload.test/index.html\",\"headers\":{}}],\"skipped\":[]}}"
     ;;
   *'/api/v1/publish/demo')
     if [[ "$method" == GET ]]; then
-      emit_json '{"slug":"demo","siteUrl":"https://demo.mock.test","viewer":{"title":"Test Site"},"tags":["cre"],"manifest":[{"path":"index.html","size":18,"contentType":"text/html; charset=utf-8"}]}'
+      emit_json '{"slug":"demo","siteUrl":"https://demo.mock.test","viewer":{"title":"Test Site"},"tags":["cre"],"manifest":[{"path":"index.html","size":18,"contentType":"text/html; charset=utf-8"}]}' |
+        jq --arg expiry "${MOCK_EXPIRES_AT:-}" 'if $expiry == "__missing__" then . else .expiresAt = (if $expiry == "" then null else $expiry end) end'
     else
       emit_json '{"slug":"demo","siteUrl":"https://demo.mock.test","status":"published","upload":{"versionId":"ver_1","finalizeUrl":"https://mock.test/finalize","uploads":[{"path":"index.html","url":"https://upload.test/index.html","headers":{}}],"skipped":[]}}'
     fi
@@ -264,5 +271,20 @@ assert_contains "$TEST_ROOT/stderr" "anonymous publish (expires at 2030-01-02T00
 assert_status 0 run_publish "$TEST_ROOT/site" --no-verify
 assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=permanent"
 assert_contains "$TEST_ROOT/stderr" "authenticated publish (permanent, saved to your account)"
+
+MOCK_EXPIRES_AT="2030-02-03T04:05:06.000Z" MOCK_EXPECT_TTL=3600 \
+  assert_status 0 run_publish --metadata-only --slug demo --ttl 3600 --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.action=metadata"
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=expires_at"
+assert_contains "$TEST_ROOT/stderr" "publish_result.expires_at=2030-02-03T04:05:06.000Z"
+
+MOCK_EXPIRES_AT="__missing__" MOCK_EXPECT_TTL=3600 \
+  assert_status 0 run_publish --metadata-only --slug demo --ttl 3600 --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=unknown"
+
+# A confirmed null expiry is different from a missing field.
+MOCK_EXPECT_TTL=null assert_status 0 run_publish --metadata-only --slug demo --ttl null
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=permanent"
+grep -Fxq 'publish_result.expires_at=' "$TEST_ROOT/stderr" || fail "cleared TTL did not report an empty expiry"
 
 echo "publish.sh tests passed"

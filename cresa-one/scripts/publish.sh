@@ -49,7 +49,7 @@ Options:
   --rename-to <slug>     Rename --slug without uploading files (authenticated only)
   --check-slug <slug>    Print slug availability; exits non-zero when unavailable
   --suggest-slug         Print a fresh available slug (authenticated only)
-  --ttl <seconds>         Expiry (authenticated only)
+  --ttl <seconds>         Expiry (anonymous or authenticated)
   --client <name>         Agent name for attribution (e.g. cursor, claude-code)
   --tags <json-array>     Replace Site tags after publish (authenticated only)
   --spa                   Enable SPA routing
@@ -840,10 +840,10 @@ fi
 echo "$SITE_URL"
 
 PERSISTENCE="permanent"
-if [[ "$AUTH_MODE" == "anonymous" ]]; then
-  PERSISTENCE="expires_24h"
-elif [[ -n "$RESPONSE_EXPIRES" ]]; then
+if [[ -n "$RESPONSE_EXPIRES" ]]; then
   PERSISTENCE="expires_at"
+elif [[ "$AUTH_MODE" == "anonymous" ]]; then
+  PERSISTENCE="unknown"
 fi
 
 SAFE_CLAIM_URL=""
@@ -867,9 +867,17 @@ echo "publish_result.expires_at=$RESPONSE_EXPIRES" >&2
 echo "publish_result.claim_url=$SAFE_CLAIM_URL" >&2
 
 if [[ "$AUTH_MODE" == "authenticated" ]]; then
-  echo "authenticated publish (permanent, saved to your account)" >&2
+  if [[ -n "$RESPONSE_EXPIRES" ]]; then
+    echo "authenticated publish (expires at $RESPONSE_EXPIRES, saved to your account)" >&2
+  else
+    echo "authenticated publish (permanent, saved to your account)" >&2
+  fi
 else
-  echo "anonymous publish (expires in 24h)" >&2
+  if [[ -n "$RESPONSE_EXPIRES" ]]; then
+    echo "anonymous publish (expires at $RESPONSE_EXPIRES)" >&2
+  else
+    echo "anonymous publish (expiry not returned; confirm Site status)" >&2
+  fi
   if [[ -n "$SAFE_CLAIM_URL" ]]; then
     echo "claim URL: $SAFE_CLAIM_URL" >&2
   fi

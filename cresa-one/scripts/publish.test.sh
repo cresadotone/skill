@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PUBLISH_SH="$SCRIPT_DIR/publish.sh"
+MOCK_CAT_BIN=$(command -v cat)
+export MOCK_CAT_BIN
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
@@ -10,6 +12,9 @@ fail() {
   echo "FAIL: $1" >&2
   exit 1
 }
+
+TEST_SUITE="${1:-all}"
+[[ "$TEST_SUITE" == all || "$TEST_SUITE" == expiry ]] || fail "usage: publish.test.sh [all|expiry]"
 
 assert_contains() {
   local file="$1"
@@ -82,7 +87,10 @@ case "$url" in
   *'/tags') emit_json '{"slug":"demo","tags":["cre"]}' ;;
   'https://mock.test/api/v1/publish')
     slug=$(printf '%s' "$data" | jq -r '.slug // "random-name-a1b2"')
-    emit_json "{\"slug\":\"$slug\",\"siteUrl\":\"https://$slug.mock.test\",\"status\":\"pending\",\"upload\":{\"versionId\":\"ver_1\",\"finalizeUrl\":\"https://mock.test/finalize\",\"uploads\":[{\"path\":\"index.html\",\"url\":\"https://upload.test/index.html\",\"headers\":{}}],\"skipped\":[]}}"
+    if [[ -n "${MOCK_EXPECT_TTL:-}" ]]; then
+      printf '%s' "$data" | jq -e --argjson ttl "$MOCK_EXPECT_TTL" '.ttlSeconds == $ttl' >/dev/null || exit 71
+    fi
+    emit_json "{\"slug\":\"$slug\",\"siteUrl\":\"https://$slug.mock.test\",\"status\":\"pending\",\"expiresAt\":\"${MOCK_EXPIRES_AT:-}\",\"upload\":{\"versionId\":\"ver_1\",\"finalizeUrl\":\"https://mock.test/finalize\",\"uploads\":[{\"path\":\"index.html\",\"url\":\"https://upload.test/index.html\",\"headers\":{}}],\"skipped\":[]}}"
     ;;
   *'/api/v1/publish/demo')
     if [[ "$method" == GET ]]; then
@@ -113,6 +121,16 @@ esac
 MOCK_CURL
 chmod +x "$TEST_ROOT/bin/curl"
 
+# Isolate credential-file reads without changing HOME or touching real credentials.
+cat > "$TEST_ROOT/bin/cat" <<'MOCK_CAT'
+#!/usr/bin/env bash
+if [[ "$#" -eq 1 && "$1" == */.cresaone/credentials ]]; then
+  exit 0
+fi
+exec "$MOCK_CAT_BIN" "$@"
+MOCK_CAT
+chmod +x "$TEST_ROOT/bin/cat"
+
 run_publish() {
   (
     cd "$TEST_ROOT/site"
@@ -122,6 +140,8 @@ run_publish() {
       MOCK_CORRUPT="${MOCK_CORRUPT:-0}" \
       MOCK_CONTENT_TYPE="${MOCK_CONTENT_TYPE:-text/html; charset=utf-8}" \
       MOCK_ACCESS_MODE="${MOCK_ACCESS_MODE:-anyone_with_link}" \
+      MOCK_EXPIRES_AT="${MOCK_EXPIRES_AT:-}" \
+      MOCK_EXPECT_TTL="${MOCK_EXPECT_TTL:-}" \
       "$PUBLISH_SH" --base-url https://mock.test --allow-noncresaone-base-url "$@"
   )
 }
@@ -131,86 +151,118 @@ run_publish_noauth() {
     cd "$TEST_ROOT/site"
     PATH="$TEST_ROOT/bin:$PATH" \
       CRESAONE_API_KEY="" \
-      HOME="$TEST_ROOT/fakehome" \
       MOCK_SITE_DIR="$TEST_ROOT/site" \
+      MOCK_EXPIRES_AT="${MOCK_EXPIRES_AT:-}" \
+      MOCK_EXPECT_TTL="${MOCK_EXPECT_TTL:-}" \
       "$PUBLISH_SH" --base-url https://mock.test "$@"
   )
 }
 
-assert_status 1 run_publish --slug
-assert_contains "$TEST_ROOT/stderr" "--slug requires a value"
+# CI runs everything; the expiry group keeps local red/green cycles focused.
+if [[ "$TEST_SUITE" == all ]]; then
+  assert_status 1 run_publish --slug
+  assert_contains "$TEST_ROOT/stderr" "--slug requires a value"
 
-assert_status 0 run_publish --check-slug free-name
-assert_contains "$TEST_ROOT/stdout" '"available": true'
+  assert_status 0 run_publish --check-slug free-name
+  assert_contains "$TEST_ROOT/stdout" '"available": true'
 
-assert_status 1 run_publish --check-slug taken
-assert_contains "$TEST_ROOT/stdout" '"available": false'
+  assert_status 1 run_publish --check-slug taken
+  assert_contains "$TEST_ROOT/stdout" '"available": false'
 
-assert_status 0 run_publish --suggest-slug
-assert_contains "$TEST_ROOT/stdout" "bright-anchor-a1b2"
+  assert_status 0 run_publish --suggest-slug
+  assert_contains "$TEST_ROOT/stdout" "bright-anchor-a1b2"
 
-assert_status 1 run_publish --slug demo --rename-to renamed --title ignored
-assert_contains "$TEST_ROOT/stderr" "cannot be combined"
+  assert_status 1 run_publish --slug demo --rename-to renamed --title ignored
+  assert_contains "$TEST_ROOT/stderr" "cannot be combined"
 
-assert_status 0 run_publish --slug demo --rename-to renamed
-jq -e '.publishes.renamed.siteUrl == "https://renamed.mock.test" and (.publishes.demo == null)' \
-  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "rename did not move state"
-assert_contains "$TEST_ROOT/stderr" "old host now returns 404"
+  assert_status 0 run_publish --slug demo --rename-to renamed
+  jq -e '.publishes.renamed.siteUrl == "https://renamed.mock.test" and (.publishes.demo == null)' \
+    "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "rename did not move state"
+  assert_contains "$TEST_ROOT/stderr" "old host now returns 404"
 
-assert_status 0 run_publish --slug renamed --rename-to RENAMED
-jq -e '.publishes.renamed.siteUrl == "https://renamed.mock.test"' \
-  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "same-slug rename removed state"
-assert_contains "$TEST_ROOT/stderr" "slug unchanged"
+  assert_status 0 run_publish --slug renamed --rename-to RENAMED
+  jq -e '.publishes.renamed.siteUrl == "https://renamed.mock.test"' \
+    "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "same-slug rename removed state"
+  assert_contains "$TEST_ROOT/stderr" "slug unchanged"
 
-assert_status 0 run_publish "$TEST_ROOT/site" --slug demo
-assert_contains "$TEST_ROOT/stderr" "live file verification passed"
-jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
-  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "publish state was not saved"
+  assert_status 0 run_publish "$TEST_ROOT/site" --slug demo
+  assert_contains "$TEST_ROOT/stderr" "live file verification passed"
+  jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
+    "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "publish state was not saved"
 
-assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --title "Test Site" \
-  --tags '[" CRE ","cre","","this-tag-is-longer-than-thirty-two-characters"]'
-assert_contains "$TEST_ROOT/stderr" "metadata verification passed"
+  assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --title "Test Site" \
+    --tags '[" CRE ","cre","","this-tag-is-longer-than-thirty-two-characters"]'
+  assert_contains "$TEST_ROOT/stderr" "metadata verification passed"
 
-MOCK_ACCESS_MODE=password assert_status 1 run_publish "$TEST_ROOT/site" --slug demo
-assert_contains "$TEST_ROOT/stderr" "live byte verification is unavailable for password Sites"
-jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
-  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "protected verification failure lost publish state"
+  MOCK_ACCESS_MODE=password assert_status 1 run_publish "$TEST_ROOT/site" --slug demo
+  assert_contains "$TEST_ROOT/stderr" "live byte verification is unavailable for password Sites"
+  jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
+    "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "protected verification failure lost publish state"
 
-MOCK_CORRUPT=1 assert_status 1 run_publish "$TEST_ROOT/site" --slug demo
-assert_contains "$TEST_ROOT/stderr" "local hash="
-jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
-  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "verification failure lost publish state"
+  MOCK_CORRUPT=1 assert_status 1 run_publish "$TEST_ROOT/site" --slug demo
+  assert_contains "$TEST_ROOT/stderr" "local hash="
+  jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
+    "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "verification failure lost publish state"
 
-MOCK_CONTENT_TYPE='application/octet-stream' assert_status 1 run_publish "$TEST_ROOT/site" --slug demo
-assert_contains "$TEST_ROOT/stderr" "content-type expected=text/html; charset=utf-8 actual=application/octet-stream"
+  MOCK_CONTENT_TYPE='application/octet-stream' assert_status 1 run_publish "$TEST_ROOT/site" --slug demo
+  assert_contains "$TEST_ROOT/stderr" "content-type expected=text/html; charset=utf-8 actual=application/octet-stream"
 
-MOCK_CORRUPT=1 assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --no-verify
-assert_contains "$TEST_ROOT/stderr" "verification skipped"
+  MOCK_CORRUPT=1 assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --no-verify
+  assert_contains "$TEST_ROOT/stderr" "verification skipped"
 
-assert_status 1 run_publish --create --rename-to foo
-assert_contains "$TEST_ROOT/stderr" "--create cannot be combined"
+  assert_status 1 run_publish --create --rename-to foo
+  assert_contains "$TEST_ROOT/stderr" "--create cannot be combined"
 
-assert_status 1 run_publish --create --from-drive drv_1
-assert_contains "$TEST_ROOT/stderr" "implicit for --from-drive"
+  assert_status 1 run_publish --create --from-drive drv_1
+  assert_contains "$TEST_ROOT/stderr" "implicit for --from-drive"
 
-assert_status 1 run_publish "$TEST_ROOT/site" --create --slug fresh-name --claim-token nope
-assert_contains "$TEST_ROOT/stderr" "--create cannot be combined with --claim-token"
+  assert_status 1 run_publish "$TEST_ROOT/site" --create --slug fresh-name --claim-token nope
+  assert_contains "$TEST_ROOT/stderr" "--create cannot be combined with --claim-token"
 
-assert_status 1 run_publish_noauth "$TEST_ROOT/site" --create --slug fresh-name --no-verify
-assert_contains "$TEST_ROOT/stderr" "requires authentication"
+  assert_status 1 run_publish_noauth "$TEST_ROOT/site" --create --slug fresh-name --no-verify
+  assert_contains "$TEST_ROOT/stderr" "requires authentication"
 
-assert_status 0 run_publish "$TEST_ROOT/site" --create --slug fresh-name --no-verify
-assert_contains "$TEST_ROOT/stdout" "https://fresh-name.mock.test"
-assert_contains "$TEST_ROOT/stderr" "publish_result.action=create"
-jq -e '.publishes["fresh-name"].siteUrl == "https://fresh-name.mock.test"' \
-  "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "create-with-slug state was not saved"
+  assert_status 0 run_publish "$TEST_ROOT/site" --create --slug fresh-name --no-verify
+  assert_contains "$TEST_ROOT/stdout" "https://fresh-name.mock.test"
+  assert_contains "$TEST_ROOT/stderr" "publish_result.action=create"
+  jq -e '.publishes["fresh-name"].siteUrl == "https://fresh-name.mock.test"' \
+    "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "create-with-slug state was not saved"
 
-assert_status 0 run_publish "$TEST_ROOT/site" --create --no-verify
-assert_contains "$TEST_ROOT/stdout" "https://random-name-a1b2.mock.test"
-assert_contains "$TEST_ROOT/stderr" "publish_result.action=create"
+  assert_status 0 run_publish "$TEST_ROOT/site" --create --no-verify
+  assert_contains "$TEST_ROOT/stdout" "https://random-name-a1b2.mock.test"
+  assert_contains "$TEST_ROOT/stderr" "publish_result.action=create"
 
-[[ $(find "$TEST_ROOT/site" -type f | wc -l | tr -d ' ') -ge 2 ]] || fail "test fixture missing state file"
-assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --no-verify
-assert_contains "$TEST_ROOT/stderr" "creating publish (1 files)"
+  [[ $(find "$TEST_ROOT/site" -type f | wc -l | tr -d ' ') -ge 2 ]] || fail "test fixture missing state file"
+  assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --no-verify
+  assert_contains "$TEST_ROOT/stderr" "creating publish (1 files)"
+fi
+
+MOCK_EXPIRES_AT="2030-01-01T01:00:00.000Z" MOCK_EXPECT_TTL=3600 \
+  assert_status 0 run_publish_noauth "$TEST_ROOT/site" --ttl 3600 --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.auth_mode=anonymous"
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=expires_at"
+assert_contains "$TEST_ROOT/stderr" "publish_result.expires_at=2030-01-01T01:00:00.000Z"
+assert_contains "$TEST_ROOT/stderr" "anonymous publish (expires at 2030-01-01T01:00:00.000Z)"
+
+MOCK_EXPIRES_AT="2030-01-01T02:00:00.000Z" MOCK_EXPECT_TTL=7200 \
+  assert_status 0 run_publish "$TEST_ROOT/site" --ttl 7200 --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.auth_mode=authenticated"
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=expires_at"
+assert_contains "$TEST_ROOT/stderr" "publish_result.expires_at=2030-01-01T02:00:00.000Z"
+assert_contains "$TEST_ROOT/stderr" "authenticated publish (expires at 2030-01-01T02:00:00.000Z, saved to your account)"
+
+assert_status 0 run_publish_noauth "$TEST_ROOT/site" --ttl 3600 --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=unknown"
+assert_contains "$TEST_ROOT/stderr" "anonymous publish (expiry not returned; confirm Site status)"
+
+# Preserve ordinary default-expiry and permanent authenticated results.
+MOCK_EXPIRES_AT="2030-01-02T00:00:00.000Z" \
+  assert_status 0 run_publish_noauth "$TEST_ROOT/site" --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=expires_at"
+assert_contains "$TEST_ROOT/stderr" "anonymous publish (expires at 2030-01-02T00:00:00.000Z)"
+
+assert_status 0 run_publish "$TEST_ROOT/site" --no-verify
+assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=permanent"
+assert_contains "$TEST_ROOT/stderr" "authenticated publish (permanent, saved to your account)"
 
 echo "publish.sh tests passed"

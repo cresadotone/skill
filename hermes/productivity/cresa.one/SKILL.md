@@ -5,7 +5,7 @@ description: >
   Drives. Use Sites to publish HTML, documents, images, PDFs, videos, and
   static files to live URLs at {slug}.cresa.one or custom domains. Use Drives as private cloud
   folders where agents can store files (documents, context, memory, plans,
-  assets, media, research, code, etc), share them with other agents, and
+  assets, media, research, code, etc), reuse them across authorized tools, and
   continue across sessions and tools. Use when asked to "publish this", "host
   this", "deploy this", "share this on the web", "make a website", "put this
   online", "create a webpage", "generate a URL", "build a chatbot", "save this
@@ -73,7 +73,7 @@ Read the docs:
 Topics that require current docs (do not rely on local skill text alone):
 
 - Site access control (passwords and restricted access)
-- Drives and Drive sharing
+- Drives and current sharing limitations
 - custom domains
 - Site Data
 - public profiles
@@ -95,7 +95,7 @@ If the docs fetch fails or times out, continue with the local skill and live API
 - Required binaries: `curl`, `file`, `jq`
 - Optional OG generator runtime: `uv` or Python 3.10+ with Pillow
 - Optional environment variable: `$CRESAONE_API_KEY`
-- Optional Drive token variable: `$CRESAONE_DRIVE_TOKEN`
+- `$CRESAONE_DRIVE_TOKEN` exists in the helper, but scoped Drive-token file authorization is not implemented. Do not use it for file operations or share account API keys as a workaround.
 - Optional credentials file: `~/.cresaone/credentials`
 - Skill helper paths:
   - `${HERMES_SKILL_DIR}/scripts/publish.sh` for publishing sites
@@ -122,7 +122,7 @@ To create a new Site at a chosen slug in one step (authenticated only):
 
 Under the hood this is a three-step flow: create/update -> upload files -> finalize. A site is not live until finalize succeeds.
 
-Without an API key this creates an **anonymous site** that expires in 24 hours.
+Without an API key this creates an **anonymous site** with a 24-hour default TTL. Report the returned expiry when an explicit TTL is requested.
 With a saved API key, the site is permanent.
 
 **File structure:** For HTML sites, place `index.html` at the root of the directory you publish, not inside a subdirectory. The directory's contents become the site root. For example, publish `my-site/` where `my-site/index.html` exists — don't publish a parent folder that contains `my-site/`.
@@ -336,12 +336,11 @@ bash "$DRIVE" default
 bash "$DRIVE" ls "My Drive"
 bash "$DRIVE" put "My Drive" notes/today.md --from ./notes/today.md
 bash "$DRIVE" cat "My Drive" notes/today.md
-bash "$DRIVE" share "My Drive" --perms write --prefix notes/ --ttl 7d
 ```
 
-Use scoped Drive tokens for agent-to-agent handoff. If you receive a `cresaone_drive` share block, use its `token` as `Authorization: Bearer <token>` against `api_base`, respect `pathPrefix` when present, and preserve ETags on writes. A `pathPrefix` of `null` means full-Drive access. If the skill is available, prefer `drive.sh`; otherwise call the listed API operations directly.
+Drive token records can be issued with permissions, path prefixes, and TTL metadata, but file APIs do not accept them. Scoped file sharing is not implemented. Do not create a token for handoff or use a received `cresaone_drive` token for file operations, and never share account API keys as a workaround. File operations require account-owner authorization. Prefer `drive.sh` for authorized owner operations; otherwise use the documented API.
 
-Prefer `drive.sh` for backups and version snapshots:
+Drive file version history and file restore are not implemented. Keep separate backups before replacing or deleting files. Use `drive.sh` for explicit manual copies and version snapshots:
 
 ```bash
 DRIVE="${HERMES_SKILL_DIR}/scripts/drive.sh"
@@ -401,7 +400,9 @@ Never commit credentials or local state files (`~/.cresaone/credentials`, `.cres
 
 ## Getting an API key
 
-To upgrade from anonymous (24h) to permanent sites:
+To obtain an API key for account-owned publishing:
+
+Signing in does not claim existing anonymous Sites or change their expiry. Claiming is a separate authenticated `POST` to the returned `claimUrl` with `{"claimToken":"..."}` before expiry; the claim URL is an API endpoint, not a browser sign-in link.
 
 1. Ask the user for their email address.
 2. Request a one-time sign-in code:
@@ -454,15 +455,16 @@ For published sites:
 
 - Always share the `siteUrl` from the current script run.
 - Read and follow `publish_result.*` lines from script stderr to determine auth mode.
-- When `publish_result.auth_mode=authenticated`: tell the user the site is **permanent** and saved to their account. No claim URL is needed.
-- When `publish_result.auth_mode=anonymous`: tell the user the site **expires in 24 hours**. Share the claim URL (if `publish_result.claim_url` is non-empty and starts with `https://`) so they can keep it permanently. Warn that claim tokens are only returned once and cannot be recovered.
+- Use `publish_result.expires_at` for the exact returned expiry. `persistence=expires_at` means an expiry was returned; `permanent` means an authenticated Site has no expiry. If an anonymous response omits expiry, `persistence=unknown`: report that gap instead of inventing a deadline.
+- When `publish_result.auth_mode=authenticated`: tell the user the Site is saved to their account. Report a returned expiry when present; otherwise it is permanent. No claim URL is needed.
+- When `publish_result.auth_mode=anonymous`: report the returned Site expiry; 24 hours is the default, not an override of an explicit TTL. Share the claim URL (if `publish_result.claim_url` is non-empty and starts with `https://`) so they can keep it permanently. Warn that claim tokens are only returned once and cannot be recovered.
 - Never tell the user to inspect `.cresaone/state.json` for claim URLs or auth status.
 
 For Drives:
 
 - Do not describe Drive files as public URLs.
-- Tell the user Drive contents are private unless shared with a scoped token.
-- When sharing access with another agent, prefer a scoped token with a narrow `pathPrefix` and short TTL.
+- Tell the user Drive file operations require account-owner authorization; scoped token file sharing is not implemented.
+- Never recommend sharing account API keys as a substitute for limited file-sharing credentials.
 
 ## publish.sh options
 
@@ -479,7 +481,7 @@ For Drives:
 | `--rename-to {slug}`   | Rename the authenticated Site selected by `--slug` |
 | `--check-slug {slug}`  | Print availability JSON; non-zero when unavailable |
 | `--suggest-slug`       | Print a fresh available slug (authenticated only) |
-| `--ttl {seconds}`      | Set expiry (authenticated only)               |
+| `--ttl {seconds}`      | Set expiry in seconds (anonymous or authenticated)               |
 | `--client {name}`      | Agent name for attribution (e.g. `hermes`)    |
 | `--tags {json-array}`  | Replace Site tags after publish; requires authentication |
 | `--base-url {url}`     | API base URL (default: `https://cresa.one`)    |

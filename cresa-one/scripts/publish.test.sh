@@ -56,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     -X) method="$2"; shift 2 ;;
     -d|--data|--data-raw) data="$2"; shift 2 ;;
     --data-binary) shift 2 ;;
+    --connect-timeout|--max-time) shift 2 ;;
     -H) shift 2 ;;
     -D) headers_file="$2"; shift 2 ;;
     -o) output_file="$2"; shift 2 ;;
@@ -65,6 +66,10 @@ while [[ $# -gt 0 ]]; do
     *) url="$1"; shift ;;
   esac
 done
+
+if [[ -n "${MOCK_RETRY_DIR:-}" ]]; then
+  printf '%s %s\n' "$method" "$url" >> "$MOCK_RETRY_DIR/requests"
+fi
 
 emit_json() {
   printf '%s\n' "$1"
@@ -108,7 +113,25 @@ case "$url" in
     ;;
   'https://mock.test/finalize') emit_json '{"success":true}' ;;
   'https://upload.test/index.html')
-    [[ -z "$write_format" ]] || printf '200'
+    outcome=200
+    if [[ -n "$headers_file" ]]; then
+      printf 'HTTP/1.1 200 OK\r\n' > "$headers_file"
+      [[ -z "${MOCK_RETRY_AFTER:-}" ]] || printf 'Retry-After: %s\r\n' "$MOCK_RETRY_AFTER" >> "$headers_file"
+    fi
+    if [[ -n "${MOCK_RETRY_DIR:-}" ]]; then
+      count=0
+      [[ ! -f "$MOCK_RETRY_DIR/count" ]] || count=$(cat "$MOCK_RETRY_DIR/count")
+      count=$((count + 1))
+      printf '%s' "$count" > "$MOCK_RETRY_DIR/count"
+      IFS=, read -r -a outcomes <<< "${MOCK_UPLOAD_SEQUENCE:-200}"
+      index=$((count - 1))
+      [[ "$index" -lt "${#outcomes[@]}" ]] || index=$((${#outcomes[@]} - 1))
+      outcome="${outcomes[$index]}"
+    fi
+    case "$outcome" in
+      exit:*) printf '000'; exit "${outcome#exit:}" ;;
+      *) [[ -z "$write_format" ]] || printf '%s' "$outcome" ;;
+    esac
     ;;
   'https://demo.mock.test/index.html?'*)
     printf 'HTTP/1.1 200 OK\r\nContent-Type: %s\r\nCache-Control: public, max-age=60\r\n\r\n' \
@@ -127,6 +150,13 @@ case "$url" in
 esac
 MOCK_CURL
 chmod +x "$TEST_ROOT/bin/curl"
+
+cat > "$TEST_ROOT/bin/sleep" <<'MOCK_SLEEP'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$1" >> "$MOCK_RETRY_DIR/delays"
+MOCK_SLEEP
+chmod +x "$TEST_ROOT/bin/sleep"
 
 # Isolate credential-file reads without changing HOME or touching real credentials.
 cat > "$TEST_ROOT/bin/cat" <<'MOCK_CAT'
@@ -147,6 +177,9 @@ run_publish() {
       MOCK_CORRUPT="${MOCK_CORRUPT:-0}" \
       MOCK_CONTENT_TYPE="${MOCK_CONTENT_TYPE:-text/html; charset=utf-8}" \
       MOCK_ACCESS_MODE="${MOCK_ACCESS_MODE:-anyone_with_link}" \
+      MOCK_RETRY_DIR="${MOCK_RETRY_DIR:-}" \
+      MOCK_UPLOAD_SEQUENCE="${MOCK_UPLOAD_SEQUENCE:-200}" \
+      MOCK_RETRY_AFTER="${MOCK_RETRY_AFTER:-}" \
       MOCK_EXPIRES_AT="${MOCK_EXPIRES_AT:-}" \
       MOCK_EXPECT_TTL="${MOCK_EXPECT_TTL:-}" \
       "$PUBLISH_SH" --base-url https://mock.test --allow-noncresaone-base-url "$@"
@@ -286,5 +319,40 @@ assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=unknown"
 MOCK_EXPECT_TTL=null assert_status 0 run_publish --metadata-only --slug demo --ttl null
 assert_contains "$TEST_ROOT/stderr" "publish_result.persistence=permanent"
 grep -Fxq 'publish_result.expires_at=' "$TEST_ROOT/stderr" || fail "cleared TTL did not report an empty expiry"
+
+retry_case() {
+  local sequence="$1" expected_status="$2" expected_attempts="$3"
+  local retry_dir
+  retry_dir=$(mktemp -d "$TEST_ROOT/retry.XXXXXX")
+  MOCK_RETRY_DIR="$retry_dir" MOCK_UPLOAD_SEQUENCE="$sequence" \
+    assert_status "$expected_status" run_publish "$TEST_ROOT/site" --slug demo --no-verify
+  [[ $(cat "$retry_dir/count") == "$expected_attempts" ]] || fail "wrong retry count for $sequence"
+  [[ $(grep -c 'PUT https://mock.test/api/v1/publish/demo' "$retry_dir/requests") == 1 ]] || fail "publish was retried"
+  if [[ "$expected_status" -eq 0 ]]; then
+    [[ $(grep -c 'POST https://mock.test/finalize' "$retry_dir/requests") == 1 ]] || fail "expected one finalize"
+  else
+    ! grep -q '/finalize' "$retry_dir/requests" || fail "failed upload was finalized"
+    assert_contains "$TEST_ROOT/stderr" "remains pending (not finalized)"
+  fi
+  case "$expected_attempts" in
+    1) [[ ! -e "$retry_dir/delays" ]] || fail "non-retryable error slept" ;;
+    2) [[ $(cat "$retry_dir/delays") == "${MOCK_RETRY_AFTER:-1}" ]] || fail "wrong first retry delay" ;;
+    4) [[ $(tr '\n' ',' < "$retry_dir/delays") == '1,2,4,' ]] || fail "unbounded retry delay" ;;
+  esac
+}
+
+if [[ "$TEST_SUITE" == all ]]; then
+  for transient in 408 429 500 502 503 504 exit:6 exit:7 exit:18 exit:28 exit:52 exit:55 exit:56; do
+    retry_case "$transient,200" 0 2
+  done
+  retry_case '503' 1 4
+  retry_case 'exit:28' 1 4
+  MOCK_RETRY_AFTER=2 retry_case '429,200' 0 2
+  MOCK_RETRY_AFTER=120 retry_case '429' 1 1
+  MOCK_RETRY_AFTER='Wed, 21 Oct 2030 07:28:00 GMT' retry_case '503' 1 1
+  for permanent in 400 401 403 404 409 422 exit:26 exit:60; do
+    retry_case "$permanent" 1 1
+  done
+fi
 
 echo "publish.sh tests passed"

@@ -292,6 +292,16 @@ Authenticated updates require a saved API key.
 
 Signed-in users also have public profiles. Agents can help users show or hide Sites on their profile and manage profile settings through the API documented at https://cresa.one/docs#profile.
 
+## Recover an incomplete upload
+
+File PUTs retry transient network/HTTP failures up to four attempts with 1/2/4-second backoff, a 10-second connect timeout, and a 60-second timeout per attempt. Create/update and finalize calls are not automatically retried. Identical file bytes and Content-Type can be retried while the Site version is still pending; changed bytes or a finalized/abandoned version are rejected.
+
+Numeric `Retry-After` delays up to 30 seconds override shorter backoff. Longer or date-form delays stop automatic retries and leave the version pending rather than retrying too soon.
+
+If retries fail, inspect the pending version before acting. To resume an owned version, call `POST /api/v1/publish/{slug}/uploads/refresh?versionId={versionId}`, upload the remaining files, and finalize only after checking that the bundle is still intended.
+
+To discard an obsolete upload after owner approval, call `POST /api/v1/publish/{slug}/uploads/cancel` with owner authentication and `{"versionId":"the-exact-pending-version-id"}`. This marks only that version `abandoned`; it never finalizes it, deletes its files/blobs, or changes the live version, metadata, or access policy. Repeating cancellation is safe. Current or finalized versions return 409. Publish a fresh bundle afterwards. Cancellation does not reclaim storage.
+
 ## Rename a Site
 
 ```bash

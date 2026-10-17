@@ -766,6 +766,8 @@ else
   echo "uploading $UPLOAD_COUNT files..." >&2
 fi
 upload_errors=0
+upload_headers=$(mktemp)
+trap 'rm -f "$upload_headers"' EXIT
 
 for i in $(seq 0 $((UPLOAD_COUNT - 1))); do
   upload_path=$(echo "$RESPONSE" | "$JQ_BIN" -r ".upload.uploads[$i].path")
@@ -791,17 +793,44 @@ for i in $(seq 0 $((UPLOAD_COUNT - 1))); do
     ct_args=(-H "Content-Type: $(guess_content_type "$local_file")")
   fi
 
-  http_code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT "$upload_url" \
-    "${ct_args[@]+"${ct_args[@]}"}" \
-    --data-binary "@$local_file")
+  # Retry only the same file PUT, never create/update or finalize. The server
+  # acknowledges identical pending-file retries without overwriting stored bytes.
+  for attempt in 1 2 3 4; do
+    upload_exit=0
+    http_code=$(curl -sS --connect-timeout 10 --max-time 60 -D "$upload_headers" \
+      -o /dev/null -w "%{http_code}" -X PUT "$upload_url" \
+      "${ct_args[@]+"${ct_args[@]}"}" \
+      --data-binary "@$local_file") || upload_exit=$?
+    case "$upload_exit:$http_code" in
+      0:2[0-9][0-9]) break ;;
+      0:408|0:429|0:500|0:502|0:503|0:504|6:*|7:*|18:*|28:*|52:*|55:*|56:*) ;;
+      *) break ;; # Auth, validation, conflict, TLS, and local-file errors fail closed.
+    esac
+    [[ "$attempt" -lt 4 ]] || break
+    delay=$((1 << (attempt - 1)))
+    retry_after=$(awk 'tolower($1) == "retry-after:" { sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, ""); value=$0 } END { print value }' "$upload_headers")
+    if [[ -n "$retry_after" ]]; then
+      # Do not retry sooner than the server permits. Long/date delays require
+      # explicit recovery instead of an unbounded automatic sleep.
+      [[ "$retry_after" =~ ^[0-9]{1,2}$ ]] || break
+      retry_after=$((10#$retry_after))
+      [[ "$retry_after" -le 30 ]] || break
+      [[ "$retry_after" -le "$delay" ]] || delay="$retry_after"
+    fi
+    echo "retrying upload for $upload_path (attempt $((attempt + 1))/4 in ${delay}s)" >&2
+    sleep "$delay"
+  done
 
-  if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
-    echo "warning: upload failed for $upload_path (HTTP $http_code)" >&2
+  if [[ "$upload_exit" -ne 0 || ! "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+    echo "warning: upload failed for $upload_path (HTTP $http_code, curl $upload_exit)" >&2
     upload_errors=$((upload_errors + 1))
   fi
 done
 
-[[ "$upload_errors" -eq 0 ]] || die "$upload_errors file(s) failed to upload"
+rm -f "$upload_headers"
+trap - EXIT
+
+[[ "$upload_errors" -eq 0 ]] || die "$upload_errors file(s) failed to upload; version $VERSION_ID remains pending (not finalized). Inspect it before resuming or explicitly cancelling."
 
 # Step 3: Finalize
 echo "finalizing..." >&2

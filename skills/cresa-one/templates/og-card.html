@@ -1,0 +1,51 @@
+<!doctype html>
+<!--
+  OG card template, 1200x630. Rendered by scripts/og-card.py.
+  Placeholders: {{NAME}} {{HEADLINE}} {{HEADLINE_MUTED}} {{FOOTER}} {{ART}} {{FONT_FACE}}
+  Colours: {{BG}} {{PANEL}} {{HAIRLINE}} {{INK}} {{MUTED}} {{PRIMARY}} {{SIGNAL}}
+  Pass the site's own design tokens so the preview matches the page it represents.
+  {{ART}} is optional inline SVG (viewBox recommended 440x380). It may use var(--primary),
+  var(--signal), var(--ink), var(--muted), var(--panel), var(--hairline). Without art the copy
+  spans the card.
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  {{FONT_FACE}}
+  :root {
+    --bg: {{BG}}; --panel: {{PANEL}}; --hairline: {{HAIRLINE}};
+    --ink: {{INK}}; --muted: {{MUTED}}; --primary: {{PRIMARY}}; --signal: {{SIGNAL}};
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden;
+    background: var(--bg); color: var(--ink);
+    font-family: "OG Card", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    display: grid; grid-template-columns: var(--cols); align-items: stretch;
+  }
+  body.with-art { --cols: 560px 1fr; }
+  body.no-art { --cols: 1fr; }
+  .copy { padding: 72px 80px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+  body.with-art .copy { padding-right: 0; }
+  .name { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; display: flex; align-items: center; gap: 14px; }
+  .name::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); }
+  h1 { font-weight: 600; letter-spacing: -0.025em; line-height: 1.06; font-size: 68px; text-wrap: balance; }
+  body.no-art h1 { font-size: 84px; max-width: 16ch; }
+  h1 span { color: var(--muted); }
+  .foot { font-size: 24px; color: var(--muted); }
+  .art { padding: 72px 80px 72px 24px; display: flex; align-items: center; }
+  .panel { width: 100%; background: var(--panel); border: 1px solid var(--hairline); border-radius: 16px; padding: 40px 36px; }
+  .panel svg { display: block; width: 100%; height: auto; overflow: visible; }
+  body.no-art .art { display: none; }
+</style>
+</head>
+<body class="{{BODY_CLASS}}">
+  <div class="copy">
+    <div class="name">{{NAME}}</div>
+    <h1>{{HEADLINE}} <span>{{HEADLINE_MUTED}}</span></h1>
+    <div class="foot">{{FOOTER}}</div>
+  </div>
+  <div class="art"><div class="panel">{{ART}}</div></div>
+</body>
+</html>

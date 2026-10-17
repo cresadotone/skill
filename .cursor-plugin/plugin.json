@@ -1,22 +1,25 @@
 {
   "name": "cresa.one",
-  "description": "Publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or store agent files in private Drives. Includes /cresa-one auto-update for Claude Code/Cowork fallback installs. Fallback installs package .skill and .zip archives for app import.",
-  "version": "0.1.3",
+  "version": "0.3.0",
+  "description": "Publish Sites with verified access, metadata, and share cards. Store private files in account-owned Drives. Includes publishing helpers and templates.",
   "author": {
-    "name": "cresa.one"
+    "name": "cresa.one",
+    "email": "hello@cresa.one",
+    "url": "https://cresa.one"
   },
-  "homepage": "https://cresa.one",
+  "homepage": "https://github.com/cresadotone/skill#readme",
   "repository": "https://github.com/cresadotone/skill",
   "license": "MIT",
   "keywords": [
     "cresa.one",
-    "cresaone",
-    "publish",
+    "publishing",
+    "sites",
     "static-hosting",
-    "deploy",
-    "share",
-    "drive",
-    "storage"
+    "open-graph",
+    "private-storage",
+    "drives",
+    "claude-code",
+    "codex"
   ],
   "logo": "assets/logo.svg"
 }

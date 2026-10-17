@@ -5,3 +5,9 @@
 # Local credentials/state
 .cresaone/
 **/.cresaone/
+
+# Local publish credentials, state, and Python caches
+**/cresaone_credentials.txt
+**/.cresaone/
+**/__pycache__/
+**/*.pyc

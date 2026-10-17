@@ -1,0 +1,20 @@
+{
+  "name": "cresa-one",
+  "interface": {
+    "displayName": "cresa.one"
+  },
+  "plugins": [
+    {
+      "name": "cresa-one",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cresa-one"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

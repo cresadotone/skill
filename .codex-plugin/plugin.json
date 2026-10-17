@@ -1,31 +1,50 @@
 {
   "name": "cresa-one",
-  "version": "0.1.3",
-  "description": "Publish websites, apps, and files, and store private files in cloud Drives. Fallback installs package .skill and .zip archives for app import.",
+  "version": "0.3.0",
+  "description": "Publish Sites with verified access, metadata, and share cards. Store private files in account-owned Drives. Includes publishing helpers and templates.",
   "author": {
     "name": "cresa.one",
+    "email": "hello@cresa.one",
     "url": "https://cresa.one"
   },
-  "homepage": "https://cresa.one",
+  "homepage": "https://github.com/cresadotone/skill#readme",
   "repository": "https://github.com/cresadotone/skill",
   "license": "MIT",
   "keywords": [
     "cresa.one",
-    "cresaone",
-    "publish",
+    "publishing",
+    "sites",
     "static-hosting",
-    "deploy",
-    "share",
-    "drive",
-    "storage"
+    "open-graph",
+    "private-storage",
+    "drives",
+    "claude-code",
+    "codex"
   ],
+  "skills": "./skills/",
   "interface": {
     "displayName": "cresa.one",
-    "shortDescription": "Publish websites and store private agent files.",
-    "longDescription": "cresa.one lets agents publish websites, apps, and files, and store private files in cloud Drives. Publish HTML apps, documents, images, PDFs, videos, and static files to live URLs at {slug}.cresa.one or custom domains, or use private cloud Drives for agent files such as documents, context, memory, plans, assets, media, research, code, etc. Supports passwords, custom domains, proxy routes, and /cresa-one auto-update via the hosted installer — fallback installs also package .skill and .zip archives for app import; see cresa.one/docs for the full feature set.",
+    "shortDescription": "Publish Sites. Keep agent files in private Drives.",
+    "longDescription": "Turn local websites, apps, reports, and files into cresa.one Sites. Prepare HTML metadata and matching Open Graph cards, choose public, password, or restricted access, and verify the resulting Site settings. New protected Sites have access checked before content uploads. Use an offline dry run to review deliverables first.\n\nStore documents, context, and assets in private account-owned Drives. Manage Site titles, tags, profile listing, and share previews with the included helpers. The bundle includes app and decision-page templates and reference docs. The standalone installer also produces portable .skill and .zip archives.\n\nPublishing and Drive operations use the cresa.one API. Anonymous Sites are temporary; owner-managed operations require an account API key. Python 3.10+ is required for complete Site preparation. Browser-rendered share cards optionally use Playwright, with a Pillow fallback. Scoped Drive-token file sharing is not supported.",
     "developerName": "cresa.one",
-    "category": "Coding",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
     "websiteURL": "https://cresa.one",
-    "logo": "./assets/logo.svg"
+    "brandColor": "#000000",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.svg",
+    "logoDark": "./assets/logo.svg",
+    "screenshots": [
+      "./assets/screenshot-app.png",
+      "./assets/screenshot-plan.png",
+      "./assets/screenshot-share-card.png"
+    ],
+    "defaultPrompt": [
+      "Prepare this site for cresa.one with metadata and a matching share card; dry run only.",
+      "Publish this report as a restricted Site and verify its access settings.",
+      "Upload these project files to my private cresa.one Drive."
+    ]
   }
 }

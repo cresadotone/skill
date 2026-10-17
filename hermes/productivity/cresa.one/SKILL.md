@@ -13,11 +13,11 @@ description: >
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
   site with only certain people".
-version: 1.25.0
+version: 1.26.0
 author: cresa.one
 license: MIT
 prerequisites:
-  commands: [curl, file, jq]
+  commands: [curl, file, jq, python3]
 platforms: [macos, linux]
 metadata:
   hermes:
@@ -92,22 +92,62 @@ If the docs fetch fails or times out, continue with the local skill and live API
 
 ## Requirements
 
-- Required binaries: `curl`, `file`, `jq`
+- Required binaries: `curl`, `file`, `jq`; `ship.sh` also requires Python 3.10+
 - Optional OG generator runtime: `uv` or Python 3.10+ with Pillow
 - Optional environment variable: `$CRESAONE_API_KEY`
 - `$CRESAONE_DRIVE_TOKEN` exists in the helper, but scoped Drive-token file authorization is not implemented. Do not use it for file operations or share account API keys as a workaround.
-- Optional credentials file: `~/.cresaone/credentials`
-- Skill helper paths:
-  - `${HERMES_SKILL_DIR}/scripts/publish.sh` for publishing sites
-  - `${HERMES_SKILL_DIR}/scripts/drive.sh` for private Drive storage
-  - `${HERMES_SKILL_DIR}/scripts/og-image.py` for Open Graph image candidates
-  - `${HERMES_SKILL_DIR}/templates/` for the house design system + scaffolding templates (see below)
+- Optional credentials file: `~/.cresaone/credentials`; `ship.sh` also reads `cresaone_credentials.txt` in the project root or `/mnt/project/` (raw or base64)
+- Optional token-card renderer: Python Playwright with Chromium; the house-style Pillow generator remains the fallback.
+- Bundled helpers:
+  - `"${HERMES_SKILL_DIR}/scripts/ship.sh"` for complete authenticated HTML Site publishing
+  - `"${HERMES_SKILL_DIR}/scripts/inject-meta.py"` and `"${HERMES_SKILL_DIR}/scripts/og-card.py"` for standalone metadata and card rendering
+  - `"${HERMES_SKILL_DIR}/scripts/publish.sh"` for publishing sites
+  - `"${HERMES_SKILL_DIR}/scripts/drive.sh"` for private Drive storage
+  - `"${HERMES_SKILL_DIR}/scripts/og-image.py"` for Open Graph image candidates
+- Bundled design system + scaffolding templates: `${HERMES_SKILL_DIR}/templates/` (see below)
+
+## Ship: the default publish
+
+**Ship** every Site a person will open, share or return to. A ship run prepares a semantic slug, OG image, page metadata, Site metadata, tags, access, and profile listing, then verifies the requested result. `publish.sh` remains the lower-level uploader with metadata, tags, and verification support.
+
+Run it with `bash` (skill folders are often read-only and non-executable):
+
+```bash
+bash "${HERMES_SKILL_DIR}/scripts/ship.sh" {site-dir-or-index.html} \
+  --slug {semantic-slug} \
+  --title "{Name} – {what it does}" \
+  --description "{50 to 200 chars: what a visitor gets}" \
+  --keywords "{5 to 10 comma-separated terms}" \
+  --privacy private
+```
+
+### Steps
+
+1. **Decide the six inputs before building the command.** Slug, title, description, keywords, privacy, OG copy. Write them from what the Site actually does, in the user's language. Rules for each live in [reference/ship.md](reference/ship.md); read it the first time you ship in a conversation. *Done when all six are chosen and none of them names something the user would not want in a URL, a browser tab or a link preview.*
+2. **Pick the OG source.** An `og.png` already beside `index.html` is kept. Otherwise pass the Site's own design tokens with `--og-tokens` (plus `--og-art`, `--og-font`, `--og-muted` when they help) so the card matches the page, or a fully custom card with `--og-html`. With no browser available ship falls back to `og-image.py`. *Done when the card will look like the Site it previews.*
+3. **Run `ship.sh` once.** It resolves credentials (env, `./cresaone_credentials.txt`, `/mnt/project/cresaone_credentials.txt`, `~/.cresaone/credentials`; raw, `KEY=value` or base64), uses installed or installer-bundled `jq`, creates the slug when free or updates it when you own it, renders `/og.png`, writes one managed metadata block into `<head>` (replacing hand-written duplicates), applies and verifies `--access` before uploading content, publishes with Site title, description, OG path and tags, verifies profile listing, then checks the result. New protected Sites are reserved in pending status before any upload. *Done when the last line reads `ship: shipped. Every check passed.` Exit 2 means the Site is live but a named check failed: fix the cause and run the same command again; retries preserve the chosen slug. A failed rename may require omitting `--rename-from` on retry; inspect the owned Site first.*
+4. **Look at the card.** View `{out}/og.png`. *Done when you have seen it and it carries no private detail.*
+5. **Report from `ship_result.*` and `ship-report.json`.** Share the URL, access mode, privacy, profile listing, returned expiry/persistence, and where the deliverables were copied (`/mnt/user-data/outputs/{slug}/` when that folder exists, else `--out`). Present the files when the environment has a file-presentation tool.
+
+`--dry-run` stages the files, renders the card, writes the metadata and prints the plan without reading credentials or making network requests. Slug availability and current access remain unresolved until a real run. Use it when the user wants to approve the slug or preview first.
+
+### Privacy decides four things at once
+
+| `--privacy` | robots | referrer | profile list | default for |
+| --- | --- | --- | --- | --- |
+| `private` (default) | `noindex, nofollow, noarchive` | `no-referrer` | removed | anything personal, client-specific, internal, or unfinished |
+| `public` | `index, follow` | browser default | untouched (`--list` adds it) | marketing pages, tools meant to be found |
+
+Privacy is separate from access. `--access password --password ...` or `--access restricted --allow-emails ...` gates the page itself; a Site with `anyone_with_link` access remains reachable by anyone with its URL, even with `--privacy private`. State that plainly.
+
+### Beyond ship
+
+Use `publish.sh` directly for: raw-file Sites with no `index.html`, anonymous 24-hour Sites, `--from-drive` snapshots, `--metadata-only` patches, `--check-slug` / `--suggest-slug`, and TTL changes. Use `ship.sh --rename-from {old}` rather than `--rename-to` when the Site's HTML should follow the new URL, because canonical and OG tags embed the host.
 
 ## Create a site
 
 ```bash
-PUBLISH="${HERMES_SKILL_DIR}/scripts/publish.sh"
-bash "$PUBLISH" {file-or-dir} --client hermes
+"${HERMES_SKILL_DIR}/scripts/publish.sh" {file-or-dir}
 ```
 
 Outputs the live URL (e.g. `https://bright-anchor-v7w4.cresa.one/`).
@@ -115,7 +155,7 @@ Outputs the live URL (e.g. `https://bright-anchor-v7w4.cresa.one/`).
 To create a new Site at a chosen slug in one step (authenticated only):
 
 ```bash
-./scripts/publish.sh {file-or-dir} --create --slug {desired-slug}
+"${HERMES_SKILL_DIR}/scripts/publish.sh" {file-or-dir} --create --slug {desired-slug}
 ```
 
 `--create` forces `POST /api/v1/publish` instead of an update, and the requested slug is claimed atomically at creation. The server validates DNS-label rules (3–63 chars, lowercase alphanumeric and hyphens, no leading/trailing or consecutive hyphens, not reserved) and returns 409 when taken, 422 when invalid — no typo Site is created. Use plain `--slug` (without `--create`) only to update an existing Site; use `--check-slug` first when unsure whether the name is free.
@@ -133,7 +173,7 @@ The helpers set `Content-Type` from file extension and fall back to `file(1)`. C
 
 ## Scaffold on-brand apps and pages
 
-The skill bundles the house design system and two production-ready single-file templates under `${HERMES_SKILL_DIR}/templates/`. Use them whenever building a new app, dashboard, tool, or decision page so output matches the house style instead of an invented one.
+The skill bundles the house design system and two production-ready single-file templates under `templates/`. Use them whenever building a new app, dashboard, tool, or decision page so output matches the house style instead of an invented one.
 
 - `templates/DESIGN.md` — the **SF Ownership Desk** design system: absolute-black background, near-black surfaces, graphite hairlines, signal-white accent, three-level neutral text, Geist Sans / Geist Mono / Geist Pixel Square typography, component anatomy, layout, and responsive rules. Read it before designing any new surface.
 - `templates/app-template.html` — self-contained app skeleton (fonts embedded): mono default + 10 switchable themes, ⌘K command bar with live theme preview, sortable table + grouped board view, KPI tiles, filter chips, record drawer, confirm modal, toasts, full keyboard layer, CSV export, localStorage state.
@@ -145,6 +185,8 @@ The skill bundles the house design system and two production-ready single-file t
 App scaffold in short: copy `app-template.html` to `{site-dir}/index.html`, fill the `__APP_*__` placeholders, replace the `DATA` array (row shape documented inline), adjust `COLS`, then generate a matching `og.png` and publish. Do not hand-roll new shells or palettes when these templates apply.
 
 ## Rich static app publishing
+
+Use `ship.sh` for the combined HTML Site workflow. The lower-level helpers below remain supported.
 
 For polished apps, calculators, dashboards, or documents:
 
@@ -160,21 +202,20 @@ For polished apps, calculators, dashboards, or documents:
 Fast path for file + metadata + tags updates:
 
 ```bash
-PUBLISH="${HERMES_SKILL_DIR}/scripts/publish.sh"
-bash "$PUBLISH" {site-dir} \
+"${HERMES_SKILL_DIR}/scripts/publish.sh" {site-dir} \
   --slug {slug} \
   --title "Market Rent Calculator" \
   --description "Interactive CRE calculator for market rent scenarios." \
   --og-image-path /og.png \
   --tags '["calculator","cre"]' \
-  --client hermes
+  --client claude
 ```
 
-Use this command when files changed. It uploads and finalizes, saves recovery state, patches tags, then verifies live bytes, sizes, content types, and requested owner metadata. Mismatches exit non-zero with per-file details.
+Use this one command when files changed. It creates/updates the Site, uploads files with correct content types, finalizes, saves recovery state, patches tags, then verifies live bytes, sizes, content types, and requested owner metadata. Any mismatch exits non-zero with a per-file report.
 
 ## Generate an OG image
 
-Cards follow the same SF Ownership Desk design system as `templates/` output — absolute-black canvas, graphite hairlines, signal-white accents, square markers, mono metadata — so share previews match the apps they represent.
+Cards follow the same SF Ownership Desk design system as `templates/` output — absolute-black canvas, graphite hairlines, signal-white accents, square markers, mono metadata — so share previews match the apps they represent. Generate three 1200x630 candidates plus 360x189 review thumbnails:
 
 ```bash
 uv run "${HERMES_SKILL_DIR}/scripts/og-image.py" \
@@ -188,11 +229,13 @@ uv run "${HERMES_SKILL_DIR}/scripts/og-image.py" \
   --out ./og-options
 ```
 
-This emits three 1200x630 candidates plus 360x189 `_thumb.png` files. `--photo` is optional and must be the correct user-provided identity image; never substitute stock or wrong-person imagery. Inspect thumbnails at actual size, copy the winner to `{site-dir}/og.png`, then publish with `--og-image-path /og.png --verify`.
+`--photo` is optional and must point to the correct user-provided identity image; never substitute a stock or wrong-person image. Inspect each `_thumb.png` at actual size, choose one, then copy it to `{site-dir}/og.png`. Publish with `--og-image-path /og.png --verify`.
 
-Defaults enforce 18px label, 20px signal, and 18px footer floors. `--scale` can increase them but rejects values below `1.0`. Output is PNG only. Without `uv`, create a Python 3.10+ virtual environment, install Pillow, then run the script with Python.
+Typography defaults enforce 18px label, 20px signal, and 18px footer floors. `--scale` may increase them but refuses values below `1.0`. Output is PNG only. Fonts resolve from installed system fonts — Geist Sans/Mono first when installed, then Arial/Helvetica/DejaVu — with a scalable Pillow fallback; no font binaries are bundled.
 
-For a reusable design pattern, see `examples/terminal-instrument/` in the public skill repo. It includes a shared app shell, config-driven runtime, generator, and optional Playwright-based OG image generator. Treat it as an example for creating consistent app families, not as required publishing infrastructure.
+Without `uv`, create a Python 3.10+ virtual environment, install Pillow, then run `python "${HERMES_SKILL_DIR}/scripts/og-image.py"` with the same flags.
+
+For a reusable design pattern, see `examples/terminal-instrument/`. It includes a shared app shell, config-driven runtime, generator, and optional Playwright-based OG image generator. Treat it as an example for creating consistent app families, not as required publishing infrastructure.
 
 ## Update Site metadata without uploading files
 
@@ -204,12 +247,10 @@ Decision rule:
 - Only metadata/tags changed: use `publish.sh --metadata-only --slug ...`.
 
 ```bash
-PUBLISH="${HERMES_SKILL_DIR}/scripts/publish.sh"
-bash "$PUBLISH" --metadata-only --slug {slug} \
+"${HERMES_SKILL_DIR}/scripts/publish.sh" --metadata-only --slug {slug} \
   --title "Market Rent Calculator" \
   --description "Interactive CRE calculator for market rent scenarios." \
-  --og-image-path /og.png \
-  --client hermes
+  --og-image-path /og.png
 ```
 
 This calls `PATCH /api/v1/publish/{slug}/metadata`, preserves existing viewer fields, and updates the account-owned Site without creating a new Site version. Metadata-only updates require authentication because the endpoint is owner-only.
@@ -225,7 +266,7 @@ The metadata PATCH response confirms status, not the full updated viewer object:
 To update tags at the same time:
 
 ```bash
-bash "$PUBLISH" --metadata-only --slug {slug} --tags '["calculator","cre"]' --client hermes
+"${HERMES_SKILL_DIR}/scripts/publish.sh" --metadata-only --slug {slug} --tags '["calculator","cre"]'
 ```
 
 Tags are full replacement, owner-only, normalized to lowercase, deduped, sorted in responses, max 50 kept, and each tag is max 32 characters. Tags are not accepted in publish create/update bodies; use `PUT /api/v1/publish/{slug}/tags` or `publish.sh --tags`.
@@ -247,18 +288,36 @@ curl -sS "https://cresa.one/api/v1/publish/{slug}" \
   jq '{slug,status,viewer,tags,manifest}'
 ```
 
+Expected shape:
+
+```json
+{
+  "slug": "market-rent",
+  "status": "published",
+  "viewer": {
+    "title": "Market Rent Calculator",
+    "description": "Interactive CRE calculator for market rent scenarios.",
+    "ogImagePath": "/og.png"
+  },
+  "tags": ["calculator", "cre"],
+  "manifest": [
+    {"path": "index.html", "size": 12345, "contentType": "text/html; charset=utf-8"},
+    {"path": "og.png", "size": 67890, "contentType": "image/png"}
+  ]
+}
+```
+
 Manifest `contentType` reports what was stored during upload. If it is wrong, republish with the current helper so upload PUT requests send the correct `Content-Type`.
 
 ## Update an existing site
 
 ```bash
-PUBLISH="${HERMES_SKILL_DIR}/scripts/publish.sh"
-bash "$PUBLISH" {file-or-dir} --slug {slug} --verify --client hermes
+"${HERMES_SKILL_DIR}/scripts/publish.sh" {file-or-dir} --slug {slug} --verify
 ```
 
-Verification is on by default; `--verify` makes intent explicit. It hash-compares live cache-busted responses and content types. Above 50 files it checks the first 50 plus every HTML file and selected OG image. Use `--no-verify` only for deliberate large publishes or protected Sites, whose public host returns an access gate instead of source bytes.
+Verification is on by default; `--verify` makes intent explicit. A cache-busting request compares live bytes and content types against the local manifest. For more than 50 files, verification checks the first 50 plus every HTML file and the selected OG image. Use `--no-verify` only for deliberate large publishes or protected Sites, whose public host correctly returns an access gate instead of source bytes.
 
-State is saved before verification, and `.cresaone/` is excluded from uploads. Pass `--claim-token {token}` to override auto-loaded anonymous state.
+The script saves `.cresaone/state.json` before verification so a successful anonymous publish retains its one-time claim token even if verification catches a mismatch. It excludes the full `.cresaone/` directory from uploads. Pass `--claim-token {token}` to override auto-loaded anonymous state.
 
 Authenticated updates require a saved API key.
 
@@ -274,19 +333,28 @@ If retries fail, inspect the pending version before acting. To resume an owned v
 
 To discard an obsolete upload after owner approval, call `POST /api/v1/publish/{slug}/uploads/cancel` with owner authentication and `{"versionId":"the-exact-pending-version-id"}`. This marks only that version `abandoned`; it never finalizes it, deletes its files/blobs, or changes the live version, metadata, or access policy. Repeating cancellation is safe. Current or finalized versions return 409. Publish a fresh bundle afterwards. Cancellation does not reclaim storage.
 
-## Rename, check, or suggest slugs
-
-Owner-only helpers:
+## Rename a Site
 
 ```bash
-bash "$PUBLISH" --slug {old-slug} --rename-to {new-slug} --client hermes
-bash "$PUBLISH" --check-slug {preferred-slug} --client hermes
-bash "$PUBLISH" --suggest-slug --client hermes
+"${HERMES_SKILL_DIR}/scripts/publish.sh" --slug {old-slug} --rename-to {new-slug}
 ```
 
-Rename moves matching local state and warns that the old host immediately 404s, breaking shared links and cached previews while freeing the old slug. `--check-slug` prints JSON and exits non-zero when unavailable. `--suggest-slug` prints an available friendly slug. Both slug helpers require authentication; anonymous create still receives a generated slug. Once a name checks out, claim it directly with `--create --slug {name}` — no rename step needed.
+Rename is owner-only. Success moves any matching local state entry and prints both URLs. The old `{slug}.cresa.one` host returns 404 immediately: shared links and cached previews break, and another user can claim the freed slug. To verify content on the new host, republish the local directory with `--slug {new-slug} --verify`.
+
+## Check or suggest a slug
+
+Both helpers require authentication:
+
+```bash
+"${HERMES_SKILL_DIR}/scripts/publish.sh" --check-slug {preferred-slug}
+"${HERMES_SKILL_DIR}/scripts/publish.sh" --suggest-slug
+```
+
+`--check-slug` prints `{slug, available, reason}` JSON and exits non-zero when invalid or taken. Check before promising a preferred URL. `--suggest-slug` prints a fresh available `word-word-aDaD` slug. Anonymous publishing still receives a generated slug during create; these owner helpers are not anonymous endpoints. Once a name checks out, claim it directly with `--create --slug {name}` — no rename step needed.
 
 ## Change Site status
+
+Set an owned Site to `published`, `pending`, `archived`, or `disabled`:
 
 ```bash
 curl -sS -X POST "https://cresa.one/api/v1/publish/{slug}/status" \
@@ -295,7 +363,7 @@ curl -sS -X POST "https://cresa.one/api/v1/publish/{slug}/status" \
   -d '{"status":"archived"}'
 ```
 
-Supported statuses: `published`, `pending`, `archived`, `disabled`. Response: `{"slug":"{slug}","status":"archived"}`.
+Response shape: `{"slug":"{slug}","status":"archived"}`.
 
 ## Site access control
 
@@ -305,21 +373,25 @@ A Site uses one access mode at a time:
 - **password**: visitors must enter a shared password.
 - **restricted**: invite-only; only verified email addresses or email domains the owner allows can view.
 
-Read policy, merge changes, then send complete allowlists:
+Read current policy before changing it:
 
 ```bash
 curl -sS "https://cresa.one/api/v1/publish/{slug}/access" \
   -H "authorization: Bearer $CRESAONE_API_KEY"
+```
 
+Set restricted access with complete merged allowlists:
+
+```bash
 curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/access" \
   -H "authorization: Bearer $CRESAONE_API_KEY" \
   -H "content-type: application/json" \
   -d '{"mode":"restricted","allowedEmails":["person@example.com"],"allowedDomains":["example.org"]}'
 ```
 
-Mode-bearing PATCH replaces full allowlists. Restricted access requires a claimed Site. Passwords use the metadata endpoint.
+Mode-bearing PATCH requests replace full allowlists — read, merge, then write. Restricted access requires a claimed Site. Passwords use the metadata endpoint.
 
-Protected previews default off. Toggle them without changing mode, password, allowlists, or sessions:
+Protected Sites keep previews private by default. Toggle only public link previews without changing mode, passwords, allowlists, or viewer sessions:
 
 ```bash
 curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/access" \
@@ -328,7 +400,7 @@ curl -sS -X PATCH "https://cresa.one/api/v1/publish/{slug}/access" \
   -d '{"publicPreviewEnabled":true}'
 ```
 
-Enabled previews expose only approved title, optional description, and exact selected safe raster image. Other files remain gated; external services may retain cached previews after disabling.
+Enabled previews expose only owner-approved title, optional description, and exact selected PNG/JPEG/WebP/GIF. Other files stay gated. External services may retain cached previews after disabling.
 
 Before access-control work, read current docs:
 
@@ -341,21 +413,19 @@ Use a Drive when the user wants private cloud storage for agent files: documents
 Every signed-in account has a default Drive named `My Drive`.
 
 ```bash
-DRIVE="${HERMES_SKILL_DIR}/scripts/drive.sh"
-bash "$DRIVE" default
-bash "$DRIVE" ls "My Drive"
-bash "$DRIVE" put "My Drive" notes/today.md --from ./notes/today.md
-bash "$DRIVE" cat "My Drive" notes/today.md
+"${HERMES_SKILL_DIR}/scripts/drive.sh" default
+"${HERMES_SKILL_DIR}/scripts/drive.sh" ls "My Drive"
+"${HERMES_SKILL_DIR}/scripts/drive.sh" put "My Drive" notes/today.md --from ./notes/today.md
+"${HERMES_SKILL_DIR}/scripts/drive.sh" cat "My Drive" notes/today.md
 ```
 
-Drive token records can be issued with permissions, path prefixes, and TTL metadata, but file APIs do not accept them. Scoped file sharing is not implemented. Do not create a token for handoff or use a received `cresaone_drive` token for file operations, and never share account API keys as a workaround. File operations require account-owner authorization. Prefer `drive.sh` for authorized owner operations; otherwise use the documented API.
+Drive token records can be issued with permissions, path prefixes, and TTL metadata, but file APIs do not accept them. Scoped file sharing is not implemented. Do not create a token for handoff or use a received `cresaone_drive` token for file operations, and never share account API keys as a workaround. File operations require account-owner authorization. Prefer `"${HERMES_SKILL_DIR}/scripts/drive.sh"` for authorized owner operations; otherwise use the documented API.
 
 Drive file version history and file restore are not implemented. Keep separate backups before replacing or deleting files. Use `drive.sh` for explicit manual copies and version snapshots:
 
 ```bash
-DRIVE="${HERMES_SKILL_DIR}/scripts/drive.sh"
-bash "$DRIVE" put "My Drive" lineage/versions/v1.1/lineage.html --from ./lineage.html
-bash "$DRIVE" import "My Drive" lineage/versions/v1.1/source --from ./source
+"${HERMES_SKILL_DIR}/scripts/drive.sh" put "My Drive" lineage/versions/v1.1/lineage.html --from ./lineage.html
+"${HERMES_SKILL_DIR}/scripts/drive.sh" import "My Drive" lineage/versions/v1.1/source --from ./source
 ```
 
 The helper handles content type, SHA-256, staging, returned upload headers, finalize, ETags, and upload-size verification. Do not hand-roll Drive upload functions unless the helper is unavailable.
@@ -382,13 +452,24 @@ Use `ifNoneMatch:"*"` for create-only writes. Use `ifMatch:"{etag}"` when replac
 
 ## Verify a publish
 
-Local publishes verify automatically. Explicit command:
+Normal local publishes verify automatically. Explicit command:
 
 ```bash
-bash "$PUBLISH" {site-dir} --slug {slug} --verify --client hermes
+"${HERMES_SKILL_DIR}/scripts/publish.sh" {site-dir} --slug {slug} --verify
 ```
 
-The helper adds `?cresaverify=...` to bypass the public edge cache. Hash, size, HTTP, or content-type mismatches fail loudly. Authenticated runs also check requested viewer fields and normalized tags. Drive publishes verify requested owner metadata only.
+The helper adds `?cresaverify=...` to bypass the public 60-second edge cache. Hash, size, HTTP, or content-type mismatches fail loudly. Authenticated runs also check requested `viewer.title`, `viewer.description`, `viewer.ogImagePath`, and normalized tags through `GET /api/v1/publish/{slug}`. Drive publishes lack a local tree, so only requested owner metadata is verified.
+
+## Client attribution
+
+Pass `--client` so cresa.one can track reliability by agent:
+
+```bash
+"${HERMES_SKILL_DIR}/scripts/publish.sh" {file-or-dir} --client cursor
+```
+
+This sends `X-CresaOne-Client: cursor/publish-sh` on publish API calls.
+If omitted, the script sends a fallback value.
 
 ## API key storage
 
@@ -397,6 +478,8 @@ The publish script reads the API key from these sources (first match wins):
 1. `--api-key {key}` flag (CI/scripting only — avoid in interactive use)
 2. `$CRESAONE_API_KEY` environment variable
 3. `~/.cresaone/credentials` file (recommended for agents)
+
+`ship.sh` also accepts raw, `KEY=value`, or base64-encoded keys from its credential sources. Invalid encodings fail before API access; authentication failures can also mean expired or revoked keys.
 
 To store a key, write it to the credentials file:
 
@@ -461,6 +544,8 @@ Never present this local file path as a URL, and never use it as source of truth
 
 ## What to tell the user
 
+For shipped Sites, use `ship_result.*` and `ship-report.json`: URL, access, privacy, profile listing, and returned expiry. `--privacy private` does not restrict access. Report permanence only when `persistence=permanent`.
+
 For published sites:
 
 - Always share the `siteUrl` from the current script run.
@@ -475,6 +560,10 @@ For Drives:
 - Do not describe Drive files as public URLs.
 - Tell the user Drive file operations require account-owner authorization; scoped token file sharing is not implemented.
 - Never recommend sharing account API keys as a substitute for limited file-sharing credentials.
+
+## ship.sh options
+
+Run `bash "${HERMES_SKILL_DIR}/scripts/ship.sh" --help`. Main flags: `--slug`, `--title`, `--description`, `--keywords`, `--tags`, `--privacy`, `--access`, `--og-tokens`, `--og-html`, `--og`, `--rename-from`, `--out`, and `--dry-run`. Prefer `CRESAONE_SITE_PASSWORD` over a password argument.
 
 ## publish.sh options
 
@@ -492,7 +581,7 @@ For Drives:
 | `--check-slug {slug}`  | Print availability JSON; non-zero when unavailable |
 | `--suggest-slug`       | Print a fresh available slug (authenticated only) |
 | `--ttl {seconds}`      | Set expiry in seconds (anonymous or authenticated)               |
-| `--client {name}`      | Agent name for attribution (e.g. `hermes`)    |
+| `--client {name}`      | Agent name for attribution (e.g. `cursor`)    |
 | `--tags {json-array}`  | Replace Site tags after publish; requires authentication |
 | `--base-url {url}`     | API base URL (default: `https://cresa.one`)    |
 | `--allow-noncresaone-base-url` | Allow sending auth to non-default `--base-url` |
@@ -519,7 +608,7 @@ List routes with `GET /api/v1/publish/{slug}/proxy-routes`; delete one with `DEL
 
 ## Beyond publish.sh
 
-For Drive operations, use `drive.sh` or the Drive API. For broader account and Site management — Site Data, search, analytics, profiles, delete, metadata, access control, domains, subdomain handles, links, variables, proxy routes, duplication, and more — see the current docs:
+For Drive operations, use `"${HERMES_SKILL_DIR}/scripts/drive.sh"` or the Drive API. For broader account and Site management — Site Data, search, analytics, profiles, delete, metadata, access control, domains, subdomain handles, links, variables, proxy routes, duplication, and more — see the current docs:
 
 → **https://cresa.one/docs**
 

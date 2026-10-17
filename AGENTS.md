@@ -5,11 +5,15 @@ Use this file as the operating guide for AI coding agents working in the public 
 ## What This Repo Contains
 
 - `cresa-one/` - canonical cresa.one skill bundle for `npx skills add cresadotone/skill --skill cresa-one`.
-- `skills/cresa-one/` - generated compatibility mirror for Cursor/Codex plugin discovery.
+- `skills/cresa-one/` - generated compatibility mirror for existing Cursor/Codex consumers.
+- `plugin.config.json` - canonical shared plugin release metadata and presentation fields.
+- `plugins/cresa-one/` - generated, self-contained Claude Code/Codex plugin with runtime, assets, and a status command.
+- `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json` - generated Claude Code and Codex catalogs; both resolve `./plugins/cresa-one`.
 - `hermes/` - Hermes community skill bundle.
 - `commands/cresa-one.md` - Claude Code/Cowork slash command that auto-updates the installed skill through the hosted installer.
 - fallback installer archives - every install/update writes `cresa-one-{version}.skill` and `cresa-one-{version}.zip` under `~/.claude/skills/cresa-one/packages/` and tells agents to `present files to the user`.
-- `.cursor-plugin/` and `.codex-plugin/` - marketplace/plugin manifests.
+- `.cursor-plugin/` and `.codex-plugin/` - generated compatibility manifests.
+- `assets/` and `PLUGIN.md` - canonical brand assets, template screenshots, provenance, and the plugin guide.
 - `README.md` - public install and overview docs.
 
 ## Source Of Truth
@@ -26,7 +30,12 @@ If local skill text and live docs disagree, prefer live docs for product capabil
 
 ## Editing Guidance
 
-- Keep `cresa-one/SKILL.md` and `skills/cresa-one/SKILL.md` synchronized.
+- Edit the canonical runtime bundle in `cresa-one/`. In the private source repo, run `python3 scripts/sync-skill.py` to regenerate `skills/cresa-one/`, Hermes, and hosted Markdown; `--check` verifies drift without writing.
+- Edit `plugin.config.json`, `plugin-commands/status.md`, `PLUGIN.md`, and `assets/` for plugin changes. The same sync command regenerates all plugin manifests, both marketplaces, and `plugins/cresa-one/`. Never edit generated copies; keep the stable plugin/marketplace name `cresa-one` and advance the shared plugin version for release changes. Keep `skillVersion` aligned with the canonical skill.
+- Run `python3 scripts/plugin-distribution.test.py`, `claude plugin validate --strict skill/.claude-plugin/marketplace.json`, `claude plugin validate --strict skill/plugins/cresa-one`, and `node scripts/validate-plugin-codex.mjs` from the private root. Native Codex validation only reads the catalog; it does not install or change user configuration. CI checks package drift before mirror publication.
+- Reproduce screenshots with `uv run --with playwright==1.51.0 scripts/render-plugin-assets.py`, then sync. Preserve the existing logo artwork and label illustrative data. Claude Code's custom `metadata.interface` is catalog data, not a native image gallery; keep the README gallery available.
+- Keep the plugin's `status` command separate from the standalone `commands/cresa-one.md` auto-installer. Bundling the latter would create a duplicate skill invocation and manage the wrong installation.
+- Release updates must include installer BUNDLE_FILES, the version API, and the well-known index. Run `python3 scripts/skill-distribution.test.py` and `python3 skill/cresa-one/scripts/ship.test.py` from the private repository root. Do not remove expiry reporting or restore unsupported scoped Drive-sharing claims when importing local skill extensions.
 - Keep `commands/cresa-one.md` compatible with `install.sh`; fallback installs copy it to `~/.claude/commands/cresa-one.md`.
 - Keep installer archive output stable. If install output includes `present files to the user`, agents should present the listed `.skill` and `.zip` archive paths through their current environment's file presentation/attachment mechanism.
 - Keep helper scripts such as `publish.sh` and `drive.sh` compatible with documented behavior.

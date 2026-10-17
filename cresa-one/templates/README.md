@@ -55,3 +55,7 @@ desk. These files are the source of truth for that look.
   network requests — so they publish directly as cresa.one Sites.
 - When live data is unavailable, ship empty states rather than inventing
   people, companies, emails, amounts, or dates.
+
+## Token-based Open Graph card
+
+`og-card.html` is a 1200x630 card template used by `scripts/og-card.py` and `scripts/ship.sh`. Pass the Site's design tokens, optional local SVG art, and font file. Browser rendering blocks remote HTTP(S) requests; embed assets or reference local files. See `../reference/ship.md` for the complete workflow.

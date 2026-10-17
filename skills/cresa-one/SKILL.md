@@ -12,12 +12,13 @@ description: >
   to my Drive", "store this for later", "write this to cloud storage", "share a
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
-  site with only certain people".
+  site with only certain people". Use scripts/ship.sh for complete authenticated
+  HTML Site publishing with metadata, access controls, and verification.
 ---
 
 # cresa.one
 
-**Skill version: 1.25.0**
+**Skill version: 1.26.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -64,7 +65,7 @@ If they accept, detect the current environment and update accordingly:
    - Project-level: `npx skills add cresadotone/skill --skill cresa-one` (repo-pinned), or copy the updated global bundle into `./.claude/skills/cresa-one/`.
    - After updating, re-read the new `SKILL.md` before continuing the task.
 2. **Claude Desktop, Claude on the web (claude.ai), or the mobile apps** (the skill was imported as an uploaded archive; there is no persistent local install to overwrite):
-   - If the sandbox has network access, build the latest portable archive: download `SKILL.md`, `scripts/publish.sh`, `scripts/drive.sh`, `scripts/og-image.py`, and every `templates/` file from `https://raw.githubusercontent.com/cresadotone/skill/main/cresa-one/`, zip them under a top-level `cresa-one/` folder as `cresa-one-{latest}.zip`, and present the file to the user.
+   - If the sandbox has network access, build the latest portable archive: download `SKILL.md`, all six runtime helpers (`scripts/publish.sh`, `scripts/drive.sh`, `scripts/ship.sh`, `scripts/inject-meta.py`, `scripts/og-card.py`, `scripts/og-image.py`), `reference/ship.md`, and every `templates/` file from `https://raw.githubusercontent.com/cresadotone/skill/main/cresa-one/`, zip them under a top-level `cresa-one/` folder as `cresa-one-{latest}.zip`, and present the file to the user.
    - Tell the user to replace the skill themselves (agents cannot swap an uploaded skill): Settings → Capabilities → Skills → remove the old cresa-one → upload the new archive.
    - On mobile, or when the sandbox has no network or archiving capability, share the commands to run on a computer instead: `npx skills add cresadotone/skill --skill cresa-one -g` or `curl -fsSL https://cresa.one/install.sh | bash`.
 3. **Unknown environment**: ask the user where the skill is running, then follow the matching path above.
@@ -104,16 +105,57 @@ If the docs fetch fails or times out, continue with the local skill and live API
 
 ## Requirements
 
-- Required binaries: `curl`, `file`, `jq`
+- Required binaries: `curl`, `file`, `jq`; `ship.sh` also requires Python 3.10+
 - Optional OG generator runtime: `uv` or Python 3.10+ with Pillow
 - Optional environment variable: `$CRESAONE_API_KEY`
 - `$CRESAONE_DRIVE_TOKEN` exists in the helper, but scoped Drive-token file authorization is not implemented. Do not use it for file operations or share account API keys as a workaround.
-- Optional credentials file: `~/.cresaone/credentials`
+- Optional credentials file: `~/.cresaone/credentials`; `ship.sh` also reads `cresaone_credentials.txt` in the project root or `/mnt/project/` (raw or base64)
+- Optional token-card renderer: Python Playwright with Chromium; the house-style Pillow generator remains the fallback.
 - Bundled helpers:
+  - `./scripts/ship.sh` for complete authenticated HTML Site publishing
+  - `./scripts/inject-meta.py` and `./scripts/og-card.py` for standalone metadata and card rendering
   - `./scripts/publish.sh` for publishing sites
   - `./scripts/drive.sh` for private Drive storage
   - `./scripts/og-image.py` for Open Graph image candidates
 - Bundled design system + scaffolding templates: `./templates/` (see below)
+
+## Ship: the default publish
+
+**Ship** every Site a person will open, share or return to. A ship run prepares a semantic slug, OG image, page metadata, Site metadata, tags, access, and profile listing, then verifies the requested result. `publish.sh` remains the lower-level uploader with metadata, tags, and verification support.
+
+Run it with `bash` (skill folders are often read-only and non-executable):
+
+```bash
+bash ./scripts/ship.sh {site-dir-or-index.html} \
+  --slug {semantic-slug} \
+  --title "{Name} – {what it does}" \
+  --description "{50 to 200 chars: what a visitor gets}" \
+  --keywords "{5 to 10 comma-separated terms}" \
+  --privacy private
+```
+
+### Steps
+
+1. **Decide the six inputs before building the command.** Slug, title, description, keywords, privacy, OG copy. Write them from what the Site actually does, in the user's language. Rules for each live in [reference/ship.md](reference/ship.md); read it the first time you ship in a conversation. *Done when all six are chosen and none of them names something the user would not want in a URL, a browser tab or a link preview.*
+2. **Pick the OG source.** An `og.png` already beside `index.html` is kept. Otherwise pass the Site's own design tokens with `--og-tokens` (plus `--og-art`, `--og-font`, `--og-muted` when they help) so the card matches the page, or a fully custom card with `--og-html`. With no browser available ship falls back to `og-image.py`. *Done when the card will look like the Site it previews.*
+3. **Run `ship.sh` once.** It resolves credentials (env, `./cresaone_credentials.txt`, `/mnt/project/cresaone_credentials.txt`, `~/.cresaone/credentials`; raw, `KEY=value` or base64), uses installed or installer-bundled `jq`, creates the slug when free or updates it when you own it, renders `/og.png`, writes one managed metadata block into `<head>` (replacing hand-written duplicates), applies and verifies `--access` before uploading content, publishes with Site title, description, OG path and tags, verifies profile listing, then checks the result. New protected Sites are reserved in pending status before any upload. *Done when the last line reads `ship: shipped. Every check passed.` Exit 2 means the Site is live but a named check failed: fix the cause and run the same command again; retries preserve the chosen slug. A failed rename may require omitting `--rename-from` on retry; inspect the owned Site first.*
+4. **Look at the card.** View `{out}/og.png`. *Done when you have seen it and it carries no private detail.*
+5. **Report from `ship_result.*` and `ship-report.json`.** Share the URL, access mode, privacy, profile listing, returned expiry/persistence, and where the deliverables were copied (`/mnt/user-data/outputs/{slug}/` when that folder exists, else `--out`). Present the files when the environment has a file-presentation tool.
+
+`--dry-run` stages the files, renders the card, writes the metadata and prints the plan without reading credentials or making network requests. Slug availability and current access remain unresolved until a real run. Use it when the user wants to approve the slug or preview first.
+
+### Privacy decides four things at once
+
+| `--privacy` | robots | referrer | profile list | default for |
+| --- | --- | --- | --- | --- |
+| `private` (default) | `noindex, nofollow, noarchive` | `no-referrer` | removed | anything personal, client-specific, internal, or unfinished |
+| `public` | `index, follow` | browser default | untouched (`--list` adds it) | marketing pages, tools meant to be found |
+
+Privacy is separate from access. `--access password --password ...` or `--access restricted --allow-emails ...` gates the page itself; a Site with `anyone_with_link` access remains reachable by anyone with its URL, even with `--privacy private`. State that plainly.
+
+### Beyond ship
+
+Use `publish.sh` directly for: raw-file Sites with no `index.html`, anonymous 24-hour Sites, `--from-drive` snapshots, `--metadata-only` patches, `--check-slug` / `--suggest-slug`, and TTL changes. Use `ship.sh --rename-from {old}` rather than `--rename-to` when the Site's HTML should follow the new URL, because canonical and OG tags embed the host.
 
 ## Create a site
 
@@ -156,6 +198,8 @@ The skill bundles the house design system and two production-ready single-file t
 App scaffold in short: copy `app-template.html` to `{site-dir}/index.html`, fill the `__APP_*__` placeholders, replace the `DATA` array (row shape documented inline), adjust `COLS`, then generate a matching `og.png` and publish. Do not hand-roll new shells or palettes when these templates apply.
 
 ## Rich static app publishing
+
+Use `ship.sh` for the combined HTML Site workflow. The lower-level helpers below remain supported.
 
 For polished apps, calculators, dashboards, or documents:
 
@@ -448,6 +492,8 @@ The publish script reads the API key from these sources (first match wins):
 2. `$CRESAONE_API_KEY` environment variable
 3. `~/.cresaone/credentials` file (recommended for agents)
 
+`ship.sh` also accepts raw, `KEY=value`, or base64-encoded keys from its credential sources. Invalid encodings fail before API access; authentication failures can also mean expired or revoked keys.
+
 To store a key, write it to the credentials file:
 
 ```bash
@@ -511,6 +557,8 @@ Never present this local file path as a URL, and never use it as source of truth
 
 ## What to tell the user
 
+For shipped Sites, use `ship_result.*` and `ship-report.json`: URL, access, privacy, profile listing, and returned expiry. `--privacy private` does not restrict access. Report permanence only when `persistence=permanent`.
+
 For published sites:
 
 - Always share the `siteUrl` from the current script run.
@@ -525,6 +573,10 @@ For Drives:
 - Do not describe Drive files as public URLs.
 - Tell the user Drive file operations require account-owner authorization; scoped token file sharing is not implemented.
 - Never recommend sharing account API keys as a substitute for limited file-sharing credentials.
+
+## ship.sh options
+
+Run `bash ./scripts/ship.sh --help`. Main flags: `--slug`, `--title`, `--description`, `--keywords`, `--tags`, `--privacy`, `--access`, `--og-tokens`, `--og-html`, `--og`, `--rename-from`, `--out`, and `--dry-run`. Prefer `CRESAONE_SITE_PASSWORD` over a password argument.
 
 ## publish.sh options
 

@@ -38,7 +38,7 @@ version_gt() {
 installed="$(extract_local_version "$SKILL_FILE" 2>/dev/null || true)"
 [[ -n "$installed" ]] || installed="not installed"
 
-remote_json="$(curl -fsSL "$VERSION_URL" 2>/dev/null || true)"
+remote_json="$(curl -fsSL --max-time 3 "$VERSION_URL" 2>/dev/null || true)"
 latest="$(printf '%s' "$remote_json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
 
 echo "cresa.one skill"
@@ -68,6 +68,7 @@ After preflight:
 
 - If installer output includes `present files to the user`, present files to the user using the current environment's file presentation/attachment mechanism. The listed `.skill` and `.zip` archives are for quick installation in Claude Desktop, Codex, or other skill-compatible apps.
 - If `$ARGUMENTS` is empty, `status`, or `help`, summarize installed version and these helpers:
+  - Ship: `~/.claude/skills/cresa-one/scripts/ship.sh` (Python 3.10+)
   - Publish: `~/.claude/skills/cresa-one/scripts/publish.sh`
   - Drive: `~/.claude/skills/cresa-one/scripts/drive.sh`
   - Docs: `https://cresa.one/docs`

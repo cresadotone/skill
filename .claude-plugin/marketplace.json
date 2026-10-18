@@ -6,12 +6,12 @@
   },
   "metadata": {
     "description": "Publish Sites with verified access, metadata, and share cards. Store private files in account-owned Drives. Includes publishing helpers and templates.",
-    "version": "0.3.0"
+    "version": "0.3.1"
   },
   "plugins": [
     {
       "name": "cresa-one",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "description": "Publish Sites with verified access, metadata, and share cards. Store private files in account-owned Drives. Includes publishing helpers and templates.",
       "author": {
         "name": "cresa.one",
@@ -48,7 +48,7 @@
       ],
       "strict": true,
       "metadata": {
-        "skillVersion": "1.26.0",
+        "skillVersion": "1.26.1",
         "interface": {
           "displayName": "cresa.one",
           "shortDescription": "Publish Sites. Keep agent files in private Drives.",

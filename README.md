@@ -94,7 +94,7 @@ Full documentation: **https://cresa.one/docs**
 
 ## Complete Site publishing
 
-Version 1.26.0 includes `ship.sh`, `inject-meta.py`, `og-card.py`, and `reference/ship.md` in every install and portable archive. For authenticated HTML Sites:
+Version 1.26.1 includes `ship.sh`, `inject-meta.py`, `og-card.py`, and `reference/ship.md` in every install and portable archive. For authenticated HTML Sites:
 
 ```bash
 bash ./cresa-one/scripts/ship.sh ./site --slug market-rent-calculator \

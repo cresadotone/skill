@@ -1,7 +1,7 @@
 {
   "name": "cresa-one",
-  "version": "0.3.0",
-  "skillVersion": "1.26.0",
+  "version": "0.3.1",
+  "skillVersion": "1.26.1",
   "description": "Publish Sites with verified access, metadata, and share cards. Store private files in account-owned Drives. Includes publishing helpers and templates.",
   "author": {
     "name": "cresa.one",

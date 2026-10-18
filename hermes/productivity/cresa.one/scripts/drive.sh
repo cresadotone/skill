@@ -14,7 +14,7 @@ Usage: drive.sh [global options] <command> [args]
 
 Global options:
   --api-key <key>        Account API key (or $CRESAONE_API_KEY / ~/.cresaone/credentials)
-  --token <drv_live_...> Drive token (or $CRESAONE_DRIVE_TOKEN)
+  --token <cdt_...>      Drive share token (or $CRESAONE_DRIVE_TOKEN)
   --base-url <url>       API base (default: https://cresa.one)
   --allow-noncresaone-base-url
 
@@ -30,7 +30,7 @@ Commands:
   rm <drive> <path> [--recursive --confirm <path>]
   share <drive> --perms read|write [--prefix notes/] [--ttl 30d] [--label text] [--manage-tokens]
   tokens <drive>
-  revoke <drive> <tokenId>
+  revoke <drive> <tokenId>   (tokenId from `tokens` or the share response)
   delete <drive> --confirm "<drive name>"
 USAGE
   exit 1
@@ -207,14 +207,20 @@ urlenc_path() {
   echo "$out"
 }
 
+# Drive ids are opaque (cuid, e.g. cmqeb10eb000gqy24zv3pfoou, or a drv_ prefix);
+# anything else is treated as a Drive name and resolved via the account.
+looks_like_drive_id() {
+  [[ "$1" == drv_* || "$1" =~ ^c[a-z0-9]{20,}$ ]]
+}
+
 resolve_drive() {
   local name="$1"
-  if [[ "$name" == drv_* ]]; then
+  if looks_like_drive_id "$name"; then
     echo "$name"
     return
   fi
   if [[ -n "$DRIVE_TOKEN" ]]; then
-    die "drive tokens must reference drives by drv_ id; use account credentials to resolve drive names"
+    die "drive tokens must reference drives by id (see the share block's driveId); use account credentials to resolve drive names"
   fi
   if [[ "$name" == "default" || "$name" == "my-drive" || "$name" == "My Drive" ]]; then
     api_json GET "$BASE_URL/api/v1/drives/default" | "$JQ_BIN" -r '.drive.id'
@@ -440,7 +446,7 @@ case "$CMD" in
     done
     body=$("$JQ_BIN" -n --arg p "$perms" --arg pp "$prefix" --arg ttl "$ttl" --arg label "$label" --argjson mt "$manage_tokens" \
       '{perms:$p} + (if $mt then {manageTokens:true} else {} end) + (if $ttl == "" then {} else {ttl:$ttl} end) + (if $pp == "" then {} else {pathPrefix:$pp} end) + (if $label == "" then {} else {label:$label} end)')
-    api_json POST "$BASE_URL/api/v1/drives/$id/tokens" "$body" | "$JQ_BIN" -r '.shareBlock'
+    api_json POST "$BASE_URL/api/v1/drives/$id/tokens" "$body" | "$JQ_BIN" -r '.shareBlock // .token'
     ;;
   tokens)
     [[ $# -eq 1 ]] || die "usage: drive.sh tokens <drive>"

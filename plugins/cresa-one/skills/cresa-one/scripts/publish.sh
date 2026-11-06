@@ -68,21 +68,44 @@ require_flag_value() {
   [[ -n "${2:-}" ]] || die "$1 requires a value"
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUNDLED_JQ="${SKILL_DIR}/bin/jq"
+# Windows (Git Bash, MSYS2, Cygwin): curl, jq, and Python are native programs.
+# Disable MSYS argument rewriting so API values such as "/og.png" survive, and
+# pass file paths through native_path instead.
+CRESA_WINDOWS=0
+NULL_OUT="/dev/null"
+case "$(uname -s 2>/dev/null || true)" in
+  MINGW*|MSYS*|CYGWIN*)
+    CRESA_WINDOWS=1
+    NULL_OUT="NUL"
+    export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
+    ;;
+esac
+native_path() {
+  if [[ "$CRESA_WINDOWS" -eq 1 ]] && command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
 
-if [[ -x "$BUNDLED_JQ" ]]; then
-  JQ_BIN="$BUNDLED_JQ"
-elif command -v jq >/dev/null 2>&1; then
-  JQ_BIN="$(command -v jq)"
-else
-  die "requires jq"
+SCRIPT_SOURCE="${BASH_SOURCE[0]//\\//}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+JQ_BIN=""
+for candidate in "${SKILL_DIR}/bin/jq" "${SKILL_DIR}/bin/jq.exe"; do
+  if [[ -x "$candidate" ]]; then JQ_BIN="$candidate"; break; fi
+done
+[[ -n "$JQ_BIN" ]] || JQ_BIN="$(command -v jq 2>/dev/null || true)"
+[[ -n "$JQ_BIN" ]] || die "requires jq"
+if [[ "$CRESA_WINDOWS" -eq 1 ]] && "$JQ_BIN" -b -n 1 >/dev/null 2>&1; then
+  # Native jq.exe writes CRLF unless -b is set; bash comparisons need LF.
+  JQ_EXE="$JQ_BIN"
+  JQ_BIN="jq_lf"
+  jq_lf() { "$JQ_EXE" -b "$@"; }
 fi
 
-for cmd in curl file; do
-  command -v "$cmd" >/dev/null 2>&1 || die "requires $cmd"
-done
+command -v curl >/dev/null 2>&1 || die "requires curl"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -562,9 +585,11 @@ guess_content_type() {
     usdz)     echo "model/vnd.usdz+zip" ;;
     stl)      echo "model/stl" ;;
     *)
-      local detected
-      detected=$(file --brief --mime-type "$f" 2>/dev/null || echo "application/octet-stream")
-      echo "$detected"
+      local detected=""
+      if command -v file >/dev/null 2>&1; then
+        detected=$(file --brief --mime-type "$f" 2>/dev/null || true)
+      fi
+      echo "${detected:-application/octet-stream}"
       ;;
   esac
 }
@@ -636,7 +661,7 @@ verify_live_files() {
     echo "verifying $selected_count live files..." >&2
   fi
 
-  temp_dir=$(mktemp -d)
+  temp_dir=$(native_path "$(mktemp -d)")
   while [[ "$index" -lt "$selected_count" ]]; do
     file_path=$(printf '%s' "$selected" | "$JQ_BIN" -r ".[$index].path")
     expected_type=$(printf '%s' "$selected" | "$JQ_BIN" -r ".[$index].contentType // \"application/octet-stream\"")
@@ -766,7 +791,7 @@ else
   echo "uploading $UPLOAD_COUNT files..." >&2
 fi
 upload_errors=0
-upload_headers=$(mktemp)
+upload_headers=$(native_path "$(mktemp)")
 trap 'rm -f "$upload_headers"' EXIT
 
 for i in $(seq 0 $((UPLOAD_COUNT - 1))); do
@@ -798,9 +823,9 @@ for i in $(seq 0 $((UPLOAD_COUNT - 1))); do
   for attempt in 1 2 3 4; do
     upload_exit=0
     http_code=$(curl -sS --connect-timeout 10 --max-time 60 -D "$upload_headers" \
-      -o /dev/null -w "%{http_code}" -X PUT "$upload_url" \
+      -o "$NULL_OUT" -w "%{http_code}" -X PUT "$upload_url" \
       "${ct_args[@]+"${ct_args[@]}"}" \
-      --data-binary "@$local_file") || upload_exit=$?
+      --data-binary "@$(native_path "$local_file")") || upload_exit=$?
     case "$upload_exit:$http_code" in
       0:2[0-9][0-9]) break ;;
       0:408|0:429|0:500|0:502|0:503|0:504|6:*|7:*|18:*|28:*|52:*|55:*|56:*) ;;

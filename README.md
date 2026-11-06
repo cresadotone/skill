@@ -13,7 +13,20 @@ Marketplace install instructions below apply after this release reaches the publ
 /plugin install cresa-one@cresa-one
 ```
 
-Use `/cresa-one:cresa-one` for publishing and storage, or `/cresa-one:status` for bundled versions and helper paths. Update through the plugin manager:
+The plugin ships focused skills that share one bundled runtime:
+
+| Skill | Use it to |
+| --- | --- |
+| `/cresa-one:publish` | Publish a website, app, report, or files with metadata, a share card, access, and verification |
+| `/cresa-one:manage-sites` | Find, update, retag, rename, archive, claim, recover, or delete existing Sites |
+| `/cresa-one:site-health` | Run a read-only check: HTTP, TLS, finalize state, status, expiry, access gate, share image, traffic, 404s |
+| `/cresa-one:site-access` | Set a password, restrict to emails or domains, send invites, toggle link previews |
+| `/cresa-one:drive` | Store and share private files in Drives with scoped, revocable tokens |
+| `/cresa-one:domains` | Connect custom domains and manage the handle and path links |
+| `/cresa-one:site-data` | Collect form records with Site Data and forward protected paths with proxy routes |
+| `/cresa-one:cresa-one` | The complete core skill and shared runtime |
+
+`/cresa-one:status` shows bundled versions and helper paths. Agents also choose these skills automatically from the request. Update through the plugin manager:
 
 ```text
 /plugin marketplace update cresa-one
@@ -35,7 +48,9 @@ codex plugin marketplace upgrade cresa-one
 codex plugin add cresa-one@cresa-one
 ```
 
-Both marketplaces install the same self-contained `plugins/cresa-one/` package. They include the canonical skill under `skills/cresa-one/`, matching assets, and a plugin-specific status command. Plugin release metadata lives in [plugin.config.json](plugin.config.json); skill versions are tracked separately.
+Both marketplaces install the same self-contained `plugins/cresa-one/` package. It includes the canonical skill and runtime under `skills/cresa-one/`, the focused skills beside it (each one `SKILL.md` that runs `../cresa-one/scripts/`), matching assets, and a plugin-specific status command. Plugin release metadata lives in [plugin.config.json](plugin.config.json); skill versions are tracked separately.
+
+The focused skills ship only in the plugin. The standalone channels below install the single `cresa-one` skill, which already covers every workflow: archives, Hermes, and uploaded skills hold one skill folder and cannot reach a sibling runtime.
 
 ### Test a local checkout
 
@@ -57,17 +72,33 @@ Local renders of the actual bundled templates; example data is labeled. [Full pl
 npx skills add cresadotone/skill --skill cresa-one -g
 ```
 
-Or without npm:
+Or without npm, on macOS and Linux:
 
 ```bash
 curl -fsSL https://cresa.one/install.sh | bash
 ```
 
-Fallback installer also installs `/cresa-one` for Claude Code/Cowork. Typing `/cresa-one` checks live skill metadata and automatically runs the hosted installer when a newer version exists, so local skill files, helper scripts, bundled `jq`, and the command update together.
+On Windows, in PowerShell (Windows PowerShell 5.1 or PowerShell 7):
 
-The standalone installer does not update plugin caches. Use the platform's plugin update commands when installed through a marketplace.
+```powershell
+irm https://cresa.one/install.ps1 | iex
+```
 
-Each fallback install/update also packages portable archives at `~/.claude/skills/cresa-one/packages/`:
+The fallback installers also install `/cresa-one` for Claude Code/Cowork. Typing `/cresa-one` checks live skill metadata and automatically runs the hosted installer for the platform when a newer version exists, so local skill files, helper scripts, bundled `jq`, and the command update together.
+
+The standalone installers do not update plugin caches. Use the platform's plugin update commands when installed through a marketplace.
+
+### Windows
+
+| Part | Windows support |
+| --- | --- |
+| Install | `install.ps1` installs to `%USERPROFILE%\.claude\skills\cresa-one` with a checksum-verified `bin\jq.exe`, the `/cresa-one` command, and both portable archives. Running `install.sh` from Git Bash hands off to it. |
+| Helpers | `ship.sh`, `publish.sh`, `drive.sh`, and `site-health.sh` run in Git Bash (bundled with Git for Windows, which Claude Code on Windows requires). They convert paths for native `curl`, `jq.exe`, and Python and accept `python3`, `python`, or `py -3`. |
+| Auto-update | `/cresa-one` runs `install.ps1` through PowerShell on Windows and `install.sh` elsewhere. |
+| Plugins | Claude Code and Codex plugins install through their plugin managers on every platform. |
+| Not supported | Symlinks into other agents' skill folders (copy the folder instead), and Windows on Arm without x64 emulation (no native jq build). |
+
+Each fallback install/update also packages portable archives at `~/.claude/skills/cresa-one/packages/` (`%USERPROFILE%\.claude\skills\cresa-one\packages\` on Windows):
 
 - `cresa-one-{version}.skill`
 - `cresa-one-{version}.zip`
@@ -94,7 +125,7 @@ Full documentation: **https://cresa.one/docs**
 
 ## Complete Site publishing
 
-Version 1.26.1 includes `ship.sh`, `inject-meta.py`, `og-card.py`, and `reference/ship.md` in every install and portable archive. For authenticated HTML Sites:
+Version 1.27.0 includes `ship.sh`, `site-health.sh`, `inject-meta.py`, `og-card.py`, and `reference/ship.md` in every install and portable archive. For authenticated HTML Sites:
 
 ```bash
 bash ./cresa-one/scripts/ship.sh ./site --slug market-rent-calculator \
@@ -103,6 +134,14 @@ bash ./cresa-one/scripts/ship.sh ./site --slug market-rent-calculator \
 ```
 
 Ship reserves new protected Sites without publishing content, verifies access before upload, and checks metadata and profile listing. `--dry-run` prepares local deliverables without network calls. `--privacy private` controls indexing/referrers and unlisting; access still needs `--access` when the page must be gated.
+
+## Site health
+
+```bash
+bash ./cresa-one/scripts/site-health.sh market-rent-calculator
+```
+
+Read-only report on HTTP, TLS and certificate expiry, publish status, finalized or pending versions, expiry, access gate versus policy, share image, traffic, and recent 404 paths. Public checks need no key; owner checks use the account API key. Add `--json` for machine-readable output.
 
 ## Site Metadata
 

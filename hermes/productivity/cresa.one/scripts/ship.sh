@@ -12,8 +12,29 @@
 set -euo pipefail
 
 BASE_URL="https://cresa.one"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Windows (Git Bash, MSYS2, Cygwin): curl, jq, and Python are native programs.
+# Disable MSYS argument rewriting so values such as "/og.png" survive, and pass
+# file paths through native_path instead.
+CRESA_WINDOWS=0
+NULL_OUT="/dev/null"
+case "$(uname -s 2>/dev/null || true)" in
+  MINGW*|MSYS*|CYGWIN*)
+    CRESA_WINDOWS=1
+    NULL_OUT="NUL"
+    export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' PYTHONUTF8=1
+    ;;
+esac
+native_path() {
+  if [[ "$CRESA_WINDOWS" -eq 1 ]] && command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+SCRIPT_SOURCE="${BASH_SOURCE[0]//\\//}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PY_SCRIPTS="$(native_path "$SCRIPT_DIR")"
 
 TARGET="" SLUG="" RENAME_FROM="" TITLE="" DESCRIPTION="" OG_DESCRIPTION="" KEYWORDS="" TAGS=""
 PRIVACY="private" ACCESS="" PASSWORD="" ALLOW_EMAILS="" ALLOW_DOMAINS="" LIST_ON_PROFILE=""
@@ -140,21 +161,47 @@ fi
 [[ -z "$RENAME_FROM" || "$RENAME_FROM" =~ ^[a-z0-9]([a-z0-9-]{1,61})[a-z0-9]$ ]] || die "invalid --rename-from slug"
 [[ "$JSON_LD" == WebSite || "$JSON_LD" == WebApplication || "$JSON_LD" == none ]] || die "invalid --json-ld type"
 [[ "$LIST_ON_PROFILE" != yes || "$ACCESS" != password && "$ACCESS" != restricted ]] || die "protected Sites cannot be listed on a public profile"
-command -v python3 >/dev/null 2>&1 || die "requires python3"
-for cmd in curl file; do command -v "$cmd" >/dev/null 2>&1 || die "requires $cmd"; done
+# python3, python, or the Windows py launcher; skip the Microsoft Store alias.
+PYTHON=()
+for candidate in python3 python "py -3"; do
+  read -r -a parts <<<"$candidate"
+  command -v "${parts[0]}" >/dev/null 2>&1 || continue
+  if "${parts[@]}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+    PYTHON=("${parts[@]}")
+    break
+  fi
+done
+[[ "${#PYTHON[@]}" -gt 0 ]] || die "requires Python 3.10+ (python3, python, or py -3)"
+py() {
+  if [[ "$CRESA_WINDOWS" -eq 1 ]]; then
+    "${PYTHON[@]}" "$@" | tr -d '\r'
+  else
+    "${PYTHON[@]}" "$@"
+  fi
+}
+command -v curl >/dev/null 2>&1 || die "requires curl"
+if [[ "$CRESA_WINDOWS" -eq 1 ]]; then
+  for var in TARGET OG_FILE OG_HTML OG_ART OG_FONT; do
+    [[ -z "${!var}" ]] || printf -v "$var" '%s' "$(native_path "${!var}")"
+  done
+fi
 
 # ---------------------------------------------------------------- 1. dependencies
-if [[ -x "${SKILL_DIR}/bin/jq" ]]; then
+if [[ -x "${SKILL_DIR}/bin/jq" || -x "${SKILL_DIR}/bin/jq.exe" ]]; then
   PATH="${SKILL_DIR}/bin:$PATH"
 fi
-command -v jq >/dev/null 2>&1 || die "requires jq; install it or use https://cresa.one/install.sh"
+command -v jq >/dev/null 2>&1 || die "requires jq; install it with https://cresa.one/install.sh (Windows: install.ps1)"
 export PATH
+if [[ "$CRESA_WINDOWS" -eq 1 ]] && command jq -b -n 1 >/dev/null 2>&1; then
+  # Native jq.exe writes CRLF unless -b is set; bash comparisons need LF.
+  jq() { command jq -b "$@"; }
+fi
 
 # Stage locally before any account writes. Do not upload credentials or symlinks.
-STAGE="$(mktemp -d)"
-WORK="$(mktemp -d)"
+STAGE="$(native_path "$(mktemp -d)")"
+WORK="$(native_path "$(mktemp -d)")"
 trap 'rm -rf "$STAGE" "$WORK"' EXIT
-python3 - "$TARGET" "$STAGE" <<'STAGE_PY'
+py - "$TARGET" "$STAGE" <<'STAGE_PY'
 import shutil, sys
 from pathlib import Path
 source, dest = map(Path, sys.argv[1:])
@@ -182,7 +229,7 @@ SITE_URL="https://${SLUG}.cresa.one/"
 # ---------------------------------------------------------------- 2. credentials
 # Resolve credentials only after dry-run staging, and never send them in argv.
 normalize_key() {
-  python3 -c '
+  py -c '
 import base64, re, sys
 raw = sys.stdin.read().strip()
 raw = re.sub(r"^[A-Z_][A-Z0-9_]*=", "", raw).strip().strip("\"\047")
@@ -222,7 +269,7 @@ if [[ "$NO_OG" -eq 0 && "$HAS_INDEX" -eq 1 ]]; then
     [[ -f "$OG_FILE" ]] || die "--og $OG_FILE not found"
     cp "$OG_FILE" "$STAGE/og.png"; OG_SOURCE="file"
   elif [[ -n "$OG_HTML" ]]; then
-    python3 "$SCRIPT_DIR/og-card.py" --html "$OG_HTML" --out "$STAGE/og.png" || die "could not render --og-html (needs python playwright + chromium)"
+    py "$PY_SCRIPTS/og-card.py" --html "$OG_HTML" --out "$STAGE/og.png" || die "could not render --og-html (needs python playwright + chromium)"
     OG_SOURCE="custom-html"
   elif [[ -f "$STAGE/og.png" ]]; then
     OG_SOURCE="existing"
@@ -235,17 +282,17 @@ if [[ "$NO_OG" -eq 0 && "$HAS_INDEX" -eq 1 ]]; then
     CARD_ARGS=(--out "$STAGE/og.png" --name "${SITE_NAME:-$TITLE_NAME}" --headline "${OG_HEADLINE:-$TITLE_REST}" --headline-muted "$OG_MUTED" --footer "${SLUG}.cresa.one" --tokens "$OG_TOKENS")
     [[ -n "$OG_ART" ]] && CARD_ARGS+=(--art "$OG_ART")
     [[ -n "$OG_FONT" ]] && CARD_ARGS+=(--font-file "$OG_FONT")
-    set +e; python3 "$SCRIPT_DIR/og-card.py" "${CARD_ARGS[@]}"; CARD_RC=$?; set -e
+    set +e; py "$PY_SCRIPTS/og-card.py" "${CARD_ARGS[@]}"; CARD_RC=$?; set -e
     if [[ "$CARD_RC" -eq 0 ]]; then
       OG_SOURCE="token-card"
     elif [[ "$CARD_RC" -eq 3 ]]; then
       note "no browser for the token card; falling back to og-image.py (house style)"
       OG_TMP="$WORK/og"; mkdir -p "$OG_TMP"
-      if python3 -c "import PIL" >/dev/null 2>&1; then OG_RUN=(python3 "$SCRIPT_DIR/og-image.py")
+      if py -c "import PIL" >/dev/null 2>&1; then OG_RUN=(py "$PY_SCRIPTS/og-image.py")
       elif command -v uv >/dev/null 2>&1; then
         OG_RUN=(uv run)
         [[ "$DRY_RUN" -eq 1 ]] && OG_RUN+=(--offline)
-        OG_RUN+=("$SCRIPT_DIR/og-image.py")
+        OG_RUN+=("$PY_SCRIPTS/og-image.py")
       else die "no browser, no Pillow and no uv: cannot render an OG card. Pass --og <image.png> or --no-og."; fi
       # og-image.py sets --title as a short display name and refuses text that cannot fit, so it gets the name and the rest goes below it.
       "${OG_RUN[@]}" --title "${SITE_NAME:-$TITLE_NAME}" --subtitle "${OG_HEADLINE:-$TITLE_REST}" --signal "$OG_MUTED" --footer "${SLUG}.cresa.one" --layout editorial-right --out "$OG_TMP" >&2 \
@@ -257,7 +304,7 @@ if [[ "$NO_OG" -eq 0 && "$HAS_INDEX" -eq 1 ]]; then
       die "og-card.py failed"
     fi
   fi
-  DIMS="$(python3 - "$STAGE/og.png" <<'PY'
+  DIMS="$(py - "$STAGE/og.png" <<'PY'
 import struct, sys
 with open(sys.argv[1], "rb") as f:
     head = f.read(24)
@@ -279,7 +326,7 @@ if [[ "$HAS_INDEX" -eq 1 ]]; then
   [[ -n "$THEME_COLOR" ]] && META_ARGS+=(--theme-color "$THEME_COLOR")
   [[ -n "$OG_ALT" ]] && META_ARGS+=(--og-image-alt "$OG_ALT")
   [[ -n "$APP_CATEGORY" ]] && META_ARGS+=(--app-category "$APP_CATEGORY")
-  META_RESULT="$(python3 "$SCRIPT_DIR/inject-meta.py" "${META_ARGS[@]}")" || die "metadata injection failed"
+  META_RESULT="$(py "$PY_SCRIPTS/inject-meta.py" "${META_ARGS[@]}")" || die "metadata injection failed"
   printf '%s' "$META_RESULT" | jq -r '.warnings[]? | "ship: warning: " + .' >&2
 else
   note "no index.html at the Site root; skipping head metadata and OG (raw-file Site)"
@@ -443,7 +490,7 @@ if [[ "$FINAL_MODE" == anyone_with_link && "$HAS_INDEX" -eq 1 ]]; then
   grep -Fq "<title>" <<<"$LIVE" || FAILS+=("live HTML has no <title>")
   if [[ -n "$OG_PATH" ]]; then
     grep -Fq "property=\"og:image\" content=\"${SITE_URL%/}/og.png\"" <<<"$LIVE" || FAILS+=("og:image tag missing or pointing elsewhere")
-    OG_HEAD="$(curl -sS --connect-timeout 10 --max-time 60 -o /dev/null -w '%{http_code} %{content_type}' "${SITE_URL}og.png?cresaverify=$(date +%s)")"
+    OG_HEAD="$(curl -sS --connect-timeout 10 --max-time 60 -o "$NULL_OUT" -w '%{http_code} %{content_type}' "${SITE_URL}og.png?cresaverify=$(date +%s)")"
     [[ "$OG_HEAD" == 200\ image/png* ]] || FAILS+=("live og.png returned '$OG_HEAD'")
   fi
 fi

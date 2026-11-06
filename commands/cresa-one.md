@@ -6,7 +6,7 @@ allowed-tools: ["Bash"]
 
 # cresa.one Command
 
-Run this preflight first, before responding to the user. It checks the installed cresa.one skill against live metadata and automatically updates through the hosted installer when a newer version is available.
+Run this preflight first, before responding to the user. It checks the installed cresa.one skill against live metadata and automatically updates through the hosted installer when a newer version is available. It picks the installer for the platform: `install.ps1` through PowerShell on Windows (Git Bash, MSYS2, or Cygwin), `install.sh` everywhere else.
 
 ```bash
 set -euo pipefail
@@ -14,6 +14,7 @@ set -euo pipefail
 SKILL_FILE="${HOME}/.claude/skills/cresa-one/SKILL.md"
 VERSION_URL="https://cresa.one/api/skill/version"
 INSTALL_URL="https://cresa.one/install.sh"
+WINDOWS_INSTALL_URL="https://cresa.one/install.ps1"
 
 extract_local_version() {
   local file="$1"
@@ -35,6 +36,17 @@ version_gt() {
   '
 }
 
+run_installer() {
+  case "$(uname -s 2>/dev/null || true)" in
+    MINGW*|MSYS*|CYGWIN*)
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm '${WINDOWS_INSTALL_URL}' | iex"
+      ;;
+    *)
+      curl -fsSL "$INSTALL_URL" | bash
+      ;;
+  esac
+}
+
 installed="$(extract_local_version "$SKILL_FILE" 2>/dev/null || true)"
 [[ -n "$installed" ]] || installed="not installed"
 
@@ -52,7 +64,7 @@ fi
 if [[ -n "$latest" ]] && { [[ "$installed" == "not installed" ]] || version_gt "$latest" "$installed"; }; then
   echo ""
   echo "newer version found; running hosted installer..."
-  curl -fsSL "$INSTALL_URL" | bash
+  run_installer
   installed="$(extract_local_version "$SKILL_FILE" 2>/dev/null || true)"
   [[ -n "$installed" ]] || installed="unknown"
   echo ""
@@ -64,13 +76,32 @@ else
 fi
 ```
 
+If the shell tool is PowerShell rather than Bash, run this equivalent preflight instead:
+
+```powershell
+$skillFile = Join-Path $env:USERPROFILE ".claude\skills\cresa-one\SKILL.md"
+$installed = "not installed"
+if (Test-Path -LiteralPath $skillFile) {
+  $match = Select-String -LiteralPath $skillFile -Pattern '^\*\*Skill version: ([^*]+)\*\*$' | Select-Object -First 1
+  if ($match) { $installed = $match.Matches[0].Groups[1].Value }
+}
+try { $latest = (Invoke-RestMethod -Uri "https://cresa.one/api/skill/version" -TimeoutSec 3).version } catch { $latest = $null }
+"cresa.one skill"; "current: $installed"
+if ($latest) { "latest: $latest" } else { "latest: unavailable" }
+if ($latest -and ($installed -eq "not installed" -or [version]$latest -gt [version]$installed)) {
+  ""; "newer version found; running hosted installer..."
+  irm https://cresa.one/install.ps1 | iex
+} elseif (-not $latest) { "update check skipped: could not read https://cresa.one/api/skill/version" } else { "already current" }
+```
+
 After preflight:
 
 - If installer output includes `present files to the user`, present files to the user using the current environment's file presentation/attachment mechanism. The listed `.skill` and `.zip` archives are for quick installation in Claude Desktop, Codex, or other skill-compatible apps.
-- If `$ARGUMENTS` is empty, `status`, or `help`, summarize installed version and these helpers:
+- If `$ARGUMENTS` is empty, `status`, or `help`, summarize installed version and these helpers (on Windows the same files live under `%USERPROFILE%\.claude\skills\cresa-one\` and run in Git Bash):
   - Ship: `~/.claude/skills/cresa-one/scripts/ship.sh` (Python 3.10+)
   - Publish: `~/.claude/skills/cresa-one/scripts/publish.sh`
+  - Site health: `~/.claude/skills/cresa-one/scripts/site-health.sh`
   - Drive: `~/.claude/skills/cresa-one/scripts/drive.sh`
   - Docs: `https://cresa.one/docs`
-- If `$ARGUMENTS` asks to publish, store files, update metadata, manage tags, or use Drive, follow `~/.claude/skills/cresa-one/SKILL.md`.
+- If `$ARGUMENTS` asks to publish, check a Site, store files, update metadata, manage tags, or use Drive, follow `~/.claude/skills/cresa-one/SKILL.md`.
 - Never print API keys, Drive tokens, or `~/.cresaone/credentials`.

@@ -14,45 +14,76 @@ Usage: drive.sh [global options] <command> [args]
 
 Global options:
   --api-key <key>        Account API key (or $CRESAONE_API_KEY / ~/.cresaone/credentials)
-  --token <cdt_...>      Drive share token (or $CRESAONE_DRIVE_TOKEN)
+  --token <cdt_...>      Scoped Drive token someone shared with you (or $CRESAONE_DRIVE_TOKEN);
+                         used instead of the account key when set
   --base-url <url>       API base (default: https://cresa.one)
   --allow-noncresaone-base-url
 
 Commands:
-  create [name] [--default]
-  default
-  ls
+  create [name] [--default]                      owner key only
+  default                                        owner key only
+  ls                                             owner key only (lists Drives)
   ls <drive> [prefix]
   cat <drive> <path>
-  put <drive> <path> --from <local-file>
+  put <drive> <path> --from <local-file>         write scope
   import <drive> <prefix> --from <local-folder> [--dry-run]
   export <drive> <prefix> --to <local-folder> [--dry-run]
   rm <drive> <path> [--recursive --confirm <path>]
-  share <drive> --perms read|write [--prefix notes/] [--ttl 30d] [--label text] [--manage-tokens]
-  tokens <drive>
-  revoke <drive> <tokenId>   (tokenId from `tokens` or the share response)
-  delete <drive> --confirm "<drive name>"
+  share <drive> --perms read|write [--prefix notes/] [--ttl 30d] [--label text]
+                                                 owner key only; prints a cresaone_drive hand-off block
+  tokens <drive>                                 owner key only
+  revoke <drive> <tokenId>                       owner key only; tokenId from `tokens` or the share response
+  delete <drive> --confirm "<drive name>"        owner key only
+
+Drive tokens:
+  A cdt_ token is confined to one Drive, read or write scope (write includes read),
+  a literal path prefix ("notes/" confines a folder; "notes" also matches
+  "notes-archive/"), and an optional expiry. With a token, name the Drive by the
+  driveId from the hand-off block, for example:
+    CRESAONE_DRIVE_TOKEN=cdt_... drive.sh ls <driveId> notes/
 USAGE
   exit 1
 }
 
 die() { echo "error: $1" >&2; exit 1; }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUNDLED_JQ="${SKILL_DIR}/bin/jq"
+# Windows (Git Bash, MSYS2, Cygwin): curl and jq are native programs. Disable
+# MSYS argument rewriting and pass file paths through native_path instead.
+CRESA_WINDOWS=0
+NULL_OUT="/dev/null"
+case "$(uname -s 2>/dev/null || true)" in
+  MINGW*|MSYS*|CYGWIN*)
+    CRESA_WINDOWS=1
+    NULL_OUT="NUL"
+    export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
+    ;;
+esac
+native_path() {
+  if [[ "$CRESA_WINDOWS" -eq 1 ]] && command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
 
-if [[ -x "$BUNDLED_JQ" ]]; then
-  JQ_BIN="$BUNDLED_JQ"
-elif command -v jq >/dev/null 2>&1; then
-  JQ_BIN="$(command -v jq)"
-else
-  die "requires jq"
+SCRIPT_SOURCE="${BASH_SOURCE[0]//\\//}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+SKILL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+JQ_BIN=""
+for candidate in "${SKILL_DIR}/bin/jq" "${SKILL_DIR}/bin/jq.exe"; do
+  if [[ -x "$candidate" ]]; then JQ_BIN="$candidate"; break; fi
+done
+[[ -n "$JQ_BIN" ]] || JQ_BIN="$(command -v jq 2>/dev/null || true)"
+[[ -n "$JQ_BIN" ]] || die "requires jq"
+if [[ "$CRESA_WINDOWS" -eq 1 ]] && "$JQ_BIN" -b -n 1 >/dev/null 2>&1; then
+  # Native jq.exe writes CRLF unless -b is set; bash comparisons need LF.
+  JQ_EXE="$JQ_BIN"
+  JQ_BIN="jq_lf"
+  jq_lf() { "$JQ_EXE" -b "$@"; }
 fi
 
-for cmd in curl file; do
-  command -v "$cmd" >/dev/null 2>&1 || die "requires $cmd"
-done
+command -v curl >/dev/null 2>&1 || die "requires curl"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -164,7 +195,13 @@ guess_content_type() {
     glb) echo "model/gltf-binary" ;;
     usdz) echo "model/vnd.usdz+zip" ;;
     stl) echo "model/stl" ;;
-    *) file --brief --mime-type "$f" 2>/dev/null || echo "application/octet-stream" ;;
+    *)
+      local detected=""
+      if command -v file >/dev/null 2>&1; then
+        detected=$(file --brief --mime-type "$f" 2>/dev/null || true)
+      fi
+      echo "${detected:-application/octet-stream}"
+      ;;
   esac
 }
 
@@ -173,7 +210,7 @@ api_json() {
   local url="$1"; shift
   local body="${1:-}"
   local tmp
-  tmp=$(mktemp)
+  tmp=$(native_path "$(mktemp)")
   local code
   if [[ -n "$body" ]]; then
     code=$(curl -sS -o "$tmp" -w "%{http_code}" -X "$method" "$url" "${auth_header[@]}" -H "content-type: application/json" -d "$body")
@@ -285,7 +322,7 @@ put_file() {
   done < <(echo "$upload" | "$JQ_BIN" -r '(.headers // {}) | to_entries[] | "\(.key): \(.value)"')
   # Fall back to the guessed content type if the API returned no headers.
   [[ ${#put_headers[@]} -eq 0 ]] && put_headers=(-H "Content-Type: $ct")
-  http_code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT "$upload_url" "${put_headers[@]}" --data-binary "@$local_file")
+  http_code=$(curl -sS -o "$NULL_OUT" -w "%{http_code}" -X PUT "$upload_url" "${put_headers[@]}" --data-binary "@$(native_path "$local_file")")
   [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]] || die "upload failed for $path (HTTP $http_code)"
   local final remote_size
   final=$(api_json POST "$BASE_URL/api/v1/drives/$id/files/finalize" "$("$JQ_BIN" -n --arg u "$upload_id" '{uploadId:$u}')")
@@ -400,7 +437,7 @@ case "$CMD" in
           echo "download $p -> $out"
         else
           mkdir -p "$(dirname "$out")"
-          curl -fsS "$BASE_URL/api/v1/drives/$id/files/$(urlenc_path "$p")" "${auth_header[@]}" -o "$out"
+          curl -fsS "$BASE_URL/api/v1/drives/$id/files/$(urlenc_path "$p")" "${auth_header[@]}" -o "$(native_path "$out")"
         fi
         total=$((total + 1))
       done < <(echo "$files" | "$JQ_BIN" -r '.files[].path')
@@ -431,7 +468,7 @@ case "$CMD" in
     fi
     ;;
   share)
-    [[ $# -ge 1 ]] || die "usage: drive.sh share <drive> --perms read|write [--prefix notes/] [--ttl 30d] [--label text] [--manage-tokens]"
+    [[ $# -ge 1 ]] || die "usage: drive.sh share <drive> --perms read|write [--prefix notes/] [--ttl 30d] [--label text]"
     id=$(resolve_drive "$1"); shift
     perms="write"; prefix=""; ttl=""; label=""; manage_tokens="false"
     while [[ $# -gt 0 ]]; do
@@ -440,7 +477,7 @@ case "$CMD" in
         --prefix) prefix="$2"; shift 2 ;;
         --ttl) ttl="$2"; shift 2 ;;
         --label) label="$2"; shift 2 ;;
-        --manage-tokens) manage_tokens="true"; shift ;;
+        --manage-tokens) die "token management is owner-only; Drive tokens cannot manage tokens" ;;
         *) die "unexpected share argument: $1" ;;
       esac
     done

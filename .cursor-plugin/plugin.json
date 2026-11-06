@@ -1,7 +1,7 @@
 {
   "name": "cresa.one",
-  "version": "0.3.1",
-  "description": "Publish Sites with verified access, metadata, and share cards. Store private files in account-owned Drives. Includes publishing helpers and templates.",
+  "version": "0.4.0",
+  "description": "Publish Sites with verified access, metadata, and share cards; manage, health-check, and protect them. Store private files in account-owned Drives. Focused skills plus shared helpers and templates.",
   "author": {
     "name": "cresa.one",
     "email": "hello@cresa.one",

@@ -13,11 +13,11 @@ description: >
   folder with another agent", or "use my cresa.one Drive". Also use when asked
   to "password protect this site", "make this site private", or "share this
   site with only certain people".
-version: 1.26.1
+version: 1.27.0
 author: cresa.one
 license: MIT
 prerequisites:
-  commands: [curl, file, jq, python3]
+  commands: [curl, jq, python3]
 platforms: [macos, linux]
 metadata:
   hermes:
@@ -55,7 +55,7 @@ If they accept, update the Hermes-managed install:
 hermes skills install cresadotone/skill/hermes/productivity/cresa.one
 ```
 
-or via the well-known endpoint: `hermes skills install well-known:https://cresa.one/.well-known/skills/cresa.one`. If the user also keeps a Claude Code global install (`~/.claude/skills/cresa-one` exists), offer to refresh it too with `npx skills add cresadotone/skill --skill cresa-one -g` (preferred) or `curl -fsSL https://cresa.one/install.sh | bash`. After updating, re-read the new skill file before continuing the task.
+or via the well-known endpoint: `hermes skills install well-known:https://cresa.one/.well-known/skills/cresa.one`. If the user also keeps a Claude Code global install (`~/.claude/skills/cresa-one` exists), offer to refresh it too with `npx skills add cresadotone/skill --skill cresa-one -g` (preferred) or `curl -fsSL https://cresa.one/install.sh | bash` (Windows PowerShell: `irm https://cresa.one/install.ps1 | iex`). After updating, re-read the new skill file before continuing the task.
 
 ## Current docs
 
@@ -92,10 +92,11 @@ If the docs fetch fails or times out, continue with the local skill and live API
 
 ## Requirements
 
-- Required binaries: `curl`, `file`, `jq`; `ship.sh` also requires Python 3.10+
+- Required binaries: `curl` and `jq` (installers bundle `jq`); `ship.sh` also requires Python 3.10+ as `python3`, `python`, or `py -3`. `file` is optional: unknown extensions fall back to `application/octet-stream` without it.
+- Windows: run the helpers with Git Bash (part of Git for Windows, which Claude Code on Windows already requires). They detect Git Bash, MSYS2, or Cygwin, pass Windows paths to native `curl`, `jq.exe`, and Python, and keep API values such as `/og.png` intact. From PowerShell: `& "$env:ProgramFiles\Git\bin\bash.exe" "${HERMES_SKILL_DIR}/scripts/ship.sh" --help`.
 - Optional OG generator runtime: `uv` or Python 3.10+ with Pillow
 - Optional environment variable: `$CRESAONE_API_KEY`
-- `$CRESAONE_DRIVE_TOKEN` exists in the helper, but scoped Drive-token file authorization is not implemented. Do not use it for file operations or share account API keys as a workaround.
+- Optional environment variable: `$CRESAONE_DRIVE_TOKEN` (or `drive.sh --token`) for a scoped `cdt_` Drive token that a Drive owner shared with you; see "Share a Drive with a scoped token"
 - Optional credentials file: `~/.cresaone/credentials`; `ship.sh` also reads `cresaone_credentials.txt` in the project root or `/mnt/project/` (raw or base64)
 - Optional token-card renderer: Python Playwright with Chromium; the house-style Pillow generator remains the fallback.
 - Bundled helpers:
@@ -103,6 +104,7 @@ If the docs fetch fails or times out, continue with the local skill and live API
   - `"${HERMES_SKILL_DIR}/scripts/inject-meta.py"` and `"${HERMES_SKILL_DIR}/scripts/og-card.py"` for standalone metadata and card rendering
   - `"${HERMES_SKILL_DIR}/scripts/publish.sh"` for publishing sites
   - `"${HERMES_SKILL_DIR}/scripts/drive.sh"` for private Drive storage
+  - `"${HERMES_SKILL_DIR}/scripts/site-health.sh"` for read-only Site health checks
   - `"${HERMES_SKILL_DIR}/scripts/og-image.py"` for Open Graph image candidates
 - Bundled design system + scaffolding templates: `${HERMES_SKILL_DIR}/templates/` (see below)
 
@@ -419,7 +421,32 @@ Every signed-in account has a default Drive named `My Drive`.
 "${HERMES_SKILL_DIR}/scripts/drive.sh" cat "My Drive" notes/today.md
 ```
 
-Drive token records can be issued with permissions, path prefixes, and TTL metadata, but file APIs do not accept them. Scoped file sharing is not implemented. Do not create a token for handoff or use a received `cresaone_drive` token for file operations, and never share account API keys as a workaround. File operations require account-owner authorization. Prefer `"${HERMES_SKILL_DIR}/scripts/drive.sh"` for authorized owner operations; otherwise use the documented API.
+Prefer `"${HERMES_SKILL_DIR}/scripts/drive.sh"` for Drive operations; otherwise use the documented API.
+
+### Share a Drive with a scoped token
+
+Owners share one Drive, or one folder in it, with another agent through a scoped Drive token (`cdt_…`). Never share an account API key instead.
+
+```bash
+"${HERMES_SKILL_DIR}/scripts/drive.sh" share "My Drive" --perms read --prefix notes/ --ttl 7d --label "research agent"
+"${HERMES_SKILL_DIR}/scripts/drive.sh" tokens "My Drive"
+"${HERMES_SKILL_DIR}/scripts/drive.sh" revoke "My Drive" {tokenId}
+```
+
+- A token is confined to one Drive, a `read` or `write` scope (write includes read), a literal path prefix, and an optional expiry. A prefix ending in `/` confines access to that folder. A prefix without the trailing slash also matches sibling names that start with the same text (`notes` admits `notes-archive/`). Omit `--prefix` to grant the whole Drive.
+- `share` prints a `cresaone_drive` hand-off block: JSON with `driveId`, `api_base`, `token`, `perms`, `pathPrefix`, and `expiresAt`. The token is shown once and only its hash is stored. Send the block only to the intended recipient.
+- A token authorizes Drive details and file operations (list, read, write, upload, finalize, move, delete) inside its scope and prefix. It cannot list Drives, manage Drives, or manage tokens. Only the owner's API key can list, issue, or revoke tokens, and revocation (`DELETE /api/v1/drives/{driveId}/tokens/{tokenId}`) takes effect immediately.
+
+To use a token you received, reference the Drive by the `driveId` from the block, not by name:
+
+```bash
+export CRESAONE_DRIVE_TOKEN="cdt_…"          # or pass --token cdt_… before the command
+"${HERMES_SKILL_DIR}/scripts/drive.sh" ls {driveId} notes/
+"${HERMES_SKILL_DIR}/scripts/drive.sh" cat {driveId} notes/today.md
+"${HERMES_SKILL_DIR}/scripts/drive.sh" put {driveId} notes/summary.md --from ./summary.md   # write tokens only
+```
+
+When `CRESAONE_DRIVE_TOKEN` is set, `drive.sh` sends it instead of the account key. Unset it for owner-only commands: `create`, `default`, `ls` without a Drive, `share`, `tokens`, `revoke`, and `delete`. Paths outside the prefix return 403; an expired or revoked token returns 401.
 
 Drive file version history and file restore are not implemented. Keep separate backups before replacing or deleting files. Use `drive.sh` for explicit manual copies and version snapshots:
 
@@ -433,7 +460,7 @@ The helper handles content type, SHA-256, staging, returned upload headers, fina
 Raw Drive upload shape, when helper is unavailable:
 
 ```bash
-sha=$(shasum -a 256 ./lineage.html | awk '{print $1}')
+sha=$(shasum -a 256 ./lineage.html | cut -d' ' -f1)
 stage=$(curl -sS -X POST "https://cresa.one/api/v1/drives/{driveId}/files/uploads" \
   -H "authorization: Bearer $CRESAONE_API_KEY" \
   -H "content-type: application/json" \
@@ -459,6 +486,16 @@ Normal local publishes verify automatically. Explicit command:
 ```
 
 The helper adds `?cresaverify=...` to bypass the public 60-second edge cache. Hash, size, HTTP, or content-type mismatches fail loudly. Authenticated runs also check requested `viewer.title`, `viewer.description`, `viewer.ogImagePath`, and normalized tags through `GET /api/v1/publish/{slug}`. Drive publishes lack a local tree, so only requested owner metadata is verified.
+
+## Check Site health
+
+```bash
+bash "${HERMES_SKILL_DIR}/scripts/site-health.sh" {slug}                    # or https://{slug}.cresa.one/
+bash "${HERMES_SKILL_DIR}/scripts/site-health.sh" {slug} --json --range 30d
+bash "${HERMES_SKILL_DIR}/scripts/site-health.sh" https://example.com/ --slug {slug}   # custom domain
+```
+
+Read-only. Public checks need no key: HTTP status and timing, TLS validity and certificate expiry (with `openssl`), and whether an access gate is shown. With an account key it also checks publish status, finalized version or pending upload, expiry, access policy against the public response, title and share image, and analytics including recent 404 paths. Each line is `OK`, `WARN`, `FAIL`, or `SKIP`; exit 2 means a check failed. Report failures with their fix, and change nothing unless the user asks.
 
 ## Client attribution
 
@@ -558,8 +595,8 @@ For published sites:
 For Drives:
 
 - Do not describe Drive files as public URLs.
-- Tell the user Drive file operations require account-owner authorization; scoped token file sharing is not implemented.
-- Never recommend sharing account API keys as a substitute for limited file-sharing credentials.
+- When issuing a Drive token, tell the user which Drive, scope, prefix, and expiry it grants, that the token is shown once, and that they can revoke it at any time.
+- Never recommend sharing account API keys as a substitute for a scoped Drive token.
 
 ## ship.sh options
 

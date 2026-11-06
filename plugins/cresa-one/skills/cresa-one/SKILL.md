@@ -18,7 +18,7 @@ description: >
 
 # cresa.one
 
-**Skill version: 1.26.1**
+**Skill version: 1.27.0**
 
 cresa.one lets agents publish websites and store private files in cloud Drives.
 
@@ -33,9 +33,11 @@ To install or update (recommended): `npx skills add cresadotone/skill --skill cr
 
 For repo-pinned/project-local installs, run the same command without `-g`.
 
-For Claude Code/Cowork fallback installs, use `curl -fsSL https://cresa.one/install.sh | bash`. This also installs `/cresa-one` at `~/.claude/commands/cresa-one.md`.
+For Claude Code/Cowork fallback installs, use `curl -fsSL https://cresa.one/install.sh | bash` on macOS and Linux, or `irm https://cresa.one/install.ps1 | iex` in PowerShell on Windows. Both also install `/cresa-one` at `~/.claude/commands/cresa-one.md` (`%USERPROFILE%\.claude\commands\cresa-one.md` on Windows). Run in Git Bash, `install.sh` hands off to `install.ps1`.
 
-When `/cresa-one` is typed, the command checks `https://cresa.one/api/skill/version`. If a newer skill version exists, it automatically runs `curl -fsSL https://cresa.one/install.sh | bash` before continuing, so local skill files, helpers, bundled `jq`, and the slash command update together.
+The Claude Code and Codex plugin (marketplace `cresadotone/skill`, plugin `cresa-one@cresa-one`) bundles this skill plus focused skills for publishing, managing Sites, health checks, access control, Drives, domains, and Site Data. Update plugins through the platform's plugin manager; these installers manage only the standalone skill.
+
+When `/cresa-one` is typed, the command checks `https://cresa.one/api/skill/version`. If a newer skill version exists, it automatically runs the hosted installer for the platform (`install.ps1` through PowerShell on Windows, `install.sh` elsewhere) before continuing, so local skill files, helpers, bundled `jq`, and the slash command update together.
 
 Every fallback install/update also packages the installed skill into portable archives under `~/.claude/skills/cresa-one/packages/`:
 
@@ -61,13 +63,13 @@ If they accept, detect the current environment and update accordingly:
 1. **Claude Code or another CLI agent on the user's machine** (shell access and a writable `$HOME`, e.g. `~/.claude` exists):
    - Ask whether to update the **global** skill (`~/.claude/skills/cresa-one`), the **project-level** skill (`./.claude/skills/cresa-one` in the current repo), or both.
    - Global, preferred: `npx skills add cresadotone/skill --skill cresa-one -g` — the skills CLI also links the skill into the other agent directories it manages.
-   - Global fallback (no `npx`): `curl -fsSL https://cresa.one/install.sh | bash`, then mirror the skills-CLI linking behavior: for each other agent skills directory that **already exists** (for example `~/.codex/skills`, `~/.cursor/skills`, `~/.gemini/skills`, `~/.config/opencode/skills`), create or refresh a `cresa-one` symlink pointing at `~/.claude/skills/cresa-one`. Only link into directories that already exist — never create another agent's config tree, and never overwrite a real (non-symlink) directory.
+   - Global fallback (no `npx`): `curl -fsSL https://cresa.one/install.sh | bash` on macOS and Linux. On Windows run `irm https://cresa.one/install.ps1 | iex` in PowerShell, or from Git Bash `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://cresa.one/install.ps1 | iex"`. Then mirror the skills-CLI linking behavior: for each other agent skills directory that **already exists** (for example `~/.codex/skills`, `~/.cursor/skills`, `~/.gemini/skills`, `~/.config/opencode/skills`), create or refresh a `cresa-one` symlink pointing at `~/.claude/skills/cresa-one`. Only link into directories that already exist — never create another agent's config tree, and never overwrite a real (non-symlink) directory. On Windows, where symlinks need Developer Mode, copy the folder instead.
    - Project-level: `npx skills add cresadotone/skill --skill cresa-one` (repo-pinned), or copy the updated global bundle into `./.claude/skills/cresa-one/`.
    - After updating, re-read the new `SKILL.md` before continuing the task.
 2. **Claude Desktop, Claude on the web (claude.ai), or the mobile apps** (the skill was imported as an uploaded archive; there is no persistent local install to overwrite):
-   - If the sandbox has network access, build the latest portable archive: download `SKILL.md`, all six runtime helpers (`scripts/publish.sh`, `scripts/drive.sh`, `scripts/ship.sh`, `scripts/inject-meta.py`, `scripts/og-card.py`, `scripts/og-image.py`), `reference/ship.md`, and every `templates/` file from `https://raw.githubusercontent.com/cresadotone/skill/main/cresa-one/`, zip them under a top-level `cresa-one/` folder as `cresa-one-{latest}.zip`, and present the file to the user.
+   - If the sandbox has network access, build the latest portable archive: download `SKILL.md`, all seven runtime helpers (`scripts/publish.sh`, `scripts/drive.sh`, `scripts/ship.sh`, `scripts/site-health.sh`, `scripts/inject-meta.py`, `scripts/og-card.py`, `scripts/og-image.py`), `reference/ship.md`, and every `templates/` file from `https://raw.githubusercontent.com/cresadotone/skill/main/cresa-one/`, zip them under a top-level `cresa-one/` folder as `cresa-one-{latest}.zip`, and present the file to the user.
    - Tell the user to replace the skill themselves (agents cannot swap an uploaded skill): Settings → Capabilities → Skills → remove the old cresa-one → upload the new archive.
-   - On mobile, or when the sandbox has no network or archiving capability, share the commands to run on a computer instead: `npx skills add cresadotone/skill --skill cresa-one -g` or `curl -fsSL https://cresa.one/install.sh | bash`.
+   - On mobile, or when the sandbox has no network or archiving capability, share the commands to run on a computer instead: `npx skills add cresadotone/skill --skill cresa-one -g`, `curl -fsSL https://cresa.one/install.sh | bash` (macOS, Linux), or `irm https://cresa.one/install.ps1 | iex` (Windows PowerShell).
 3. **Unknown environment**: ask the user where the skill is running, then follow the matching path above.
 
 ## Current docs
@@ -105,10 +107,11 @@ If the docs fetch fails or times out, continue with the local skill and live API
 
 ## Requirements
 
-- Required binaries: `curl`, `file`, `jq`; `ship.sh` also requires Python 3.10+
+- Required binaries: `curl` and `jq` (installers bundle `jq`); `ship.sh` also requires Python 3.10+ as `python3`, `python`, or `py -3`. `file` is optional: unknown extensions fall back to `application/octet-stream` without it.
+- Windows: run the helpers with Git Bash (part of Git for Windows, which Claude Code on Windows already requires). They detect Git Bash, MSYS2, or Cygwin, pass Windows paths to native `curl`, `jq.exe`, and Python, and keep API values such as `/og.png` intact. From PowerShell: `& "$env:ProgramFiles\Git\bin\bash.exe" ./scripts/ship.sh --help`.
 - Optional OG generator runtime: `uv` or Python 3.10+ with Pillow
 - Optional environment variable: `$CRESAONE_API_KEY`
-- `$CRESAONE_DRIVE_TOKEN` exists in the helper, but scoped Drive-token file authorization is not implemented. Do not use it for file operations or share account API keys as a workaround.
+- Optional environment variable: `$CRESAONE_DRIVE_TOKEN` (or `drive.sh --token`) for a scoped `cdt_` Drive token that a Drive owner shared with you; see "Share a Drive with a scoped token"
 - Optional credentials file: `~/.cresaone/credentials`; `ship.sh` also reads `cresaone_credentials.txt` in the project root or `/mnt/project/` (raw or base64)
 - Optional token-card renderer: Python Playwright with Chromium; the house-style Pillow generator remains the fallback.
 - Bundled helpers:
@@ -116,6 +119,7 @@ If the docs fetch fails or times out, continue with the local skill and live API
   - `./scripts/inject-meta.py` and `./scripts/og-card.py` for standalone metadata and card rendering
   - `./scripts/publish.sh` for publishing sites
   - `./scripts/drive.sh` for private Drive storage
+  - `./scripts/site-health.sh` for read-only Site health checks
   - `./scripts/og-image.py` for Open Graph image candidates
 - Bundled design system + scaffolding templates: `./templates/` (see below)
 
@@ -432,7 +436,32 @@ Every signed-in account has a default Drive named `My Drive`.
 ./scripts/drive.sh cat "My Drive" notes/today.md
 ```
 
-Drive token records can be issued with permissions, path prefixes, and TTL metadata, but file APIs do not accept them. Scoped file sharing is not implemented. Do not create a token for handoff or use a received `cresaone_drive` token for file operations, and never share account API keys as a workaround. File operations require account-owner authorization. Prefer `./scripts/drive.sh` for authorized owner operations; otherwise use the documented API.
+Prefer `./scripts/drive.sh` for Drive operations; otherwise use the documented API.
+
+### Share a Drive with a scoped token
+
+Owners share one Drive, or one folder in it, with another agent through a scoped Drive token (`cdt_…`). Never share an account API key instead.
+
+```bash
+./scripts/drive.sh share "My Drive" --perms read --prefix notes/ --ttl 7d --label "research agent"
+./scripts/drive.sh tokens "My Drive"
+./scripts/drive.sh revoke "My Drive" {tokenId}
+```
+
+- A token is confined to one Drive, a `read` or `write` scope (write includes read), a literal path prefix, and an optional expiry. A prefix ending in `/` confines access to that folder. A prefix without the trailing slash also matches sibling names that start with the same text (`notes` admits `notes-archive/`). Omit `--prefix` to grant the whole Drive.
+- `share` prints a `cresaone_drive` hand-off block: JSON with `driveId`, `api_base`, `token`, `perms`, `pathPrefix`, and `expiresAt`. The token is shown once and only its hash is stored. Send the block only to the intended recipient.
+- A token authorizes Drive details and file operations (list, read, write, upload, finalize, move, delete) inside its scope and prefix. It cannot list Drives, manage Drives, or manage tokens. Only the owner's API key can list, issue, or revoke tokens, and revocation (`DELETE /api/v1/drives/{driveId}/tokens/{tokenId}`) takes effect immediately.
+
+To use a token you received, reference the Drive by the `driveId` from the block, not by name:
+
+```bash
+export CRESAONE_DRIVE_TOKEN="cdt_…"          # or pass --token cdt_… before the command
+./scripts/drive.sh ls {driveId} notes/
+./scripts/drive.sh cat {driveId} notes/today.md
+./scripts/drive.sh put {driveId} notes/summary.md --from ./summary.md   # write tokens only
+```
+
+When `CRESAONE_DRIVE_TOKEN` is set, `drive.sh` sends it instead of the account key. Unset it for owner-only commands: `create`, `default`, `ls` without a Drive, `share`, `tokens`, `revoke`, and `delete`. Paths outside the prefix return 403; an expired or revoked token returns 401.
 
 Drive file version history and file restore are not implemented. Keep separate backups before replacing or deleting files. Use `drive.sh` for explicit manual copies and version snapshots:
 
@@ -446,7 +475,7 @@ The helper handles content type, SHA-256, staging, returned upload headers, fina
 Raw Drive upload shape, when helper is unavailable:
 
 ```bash
-sha=$(shasum -a 256 ./lineage.html | awk '{print $1}')
+sha=$(shasum -a 256 ./lineage.html | cut -d' ' -f1)
 stage=$(curl -sS -X POST "https://cresa.one/api/v1/drives/{driveId}/files/uploads" \
   -H "authorization: Bearer $CRESAONE_API_KEY" \
   -H "content-type: application/json" \
@@ -472,6 +501,16 @@ Normal local publishes verify automatically. Explicit command:
 ```
 
 The helper adds `?cresaverify=...` to bypass the public 60-second edge cache. Hash, size, HTTP, or content-type mismatches fail loudly. Authenticated runs also check requested `viewer.title`, `viewer.description`, `viewer.ogImagePath`, and normalized tags through `GET /api/v1/publish/{slug}`. Drive publishes lack a local tree, so only requested owner metadata is verified.
+
+## Check Site health
+
+```bash
+bash ./scripts/site-health.sh {slug}                    # or https://{slug}.cresa.one/
+bash ./scripts/site-health.sh {slug} --json --range 30d
+bash ./scripts/site-health.sh https://example.com/ --slug {slug}   # custom domain
+```
+
+Read-only. Public checks need no key: HTTP status and timing, TLS validity and certificate expiry (with `openssl`), and whether an access gate is shown. With an account key it also checks publish status, finalized version or pending upload, expiry, access policy against the public response, title and share image, and analytics including recent 404 paths. Each line is `OK`, `WARN`, `FAIL`, or `SKIP`; exit 2 means a check failed. Report failures with their fix, and change nothing unless the user asks.
 
 ## Client attribution
 
@@ -571,8 +610,8 @@ For published sites:
 For Drives:
 
 - Do not describe Drive files as public URLs.
-- Tell the user Drive file operations require account-owner authorization; scoped token file sharing is not implemented.
-- Never recommend sharing account API keys as a substitute for limited file-sharing credentials.
+- When issuing a Drive token, tell the user which Drive, scope, prefix, and expiry it grants, that the token is shown once, and that they can revoke it at any time.
+- Never recommend sharing account API keys as a substitute for a scoped Drive token.
 
 ## ship.sh options
 

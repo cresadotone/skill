@@ -1,0 +1,14 @@
+# Keep LF endings when the plugin marketplace or a user clones this repository.
+# Git for Windows defaults to core.autocrlf=true, but Git Bash cannot run CRLF
+# shell scripts and the skill version line must match byte for byte.
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.py text eol=lf
+*.mjs text eol=lf
+*.md text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary

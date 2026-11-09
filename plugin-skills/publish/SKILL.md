@@ -48,4 +48,4 @@ Read `publish_result.*` from stderr. For anonymous Sites, share the `https://` c
 
 ## After publishing
 
-Offer a health check (`site-health` skill). For later edits, renames, or status changes, use the `manage-sites` skill; for passwords and invite lists, use `site-access`.
+Offer a health check (`site-health` skill). For later edits, rollbacks, comments, webhooks, renames, or status changes, use the `manage-sites` skill; for passwords, invite lists, lead capture, recipient links, and gate branding, use `site-access`.

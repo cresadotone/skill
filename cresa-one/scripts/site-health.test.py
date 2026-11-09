@@ -130,6 +130,23 @@ class SiteHealthTests(unittest.TestCase):
         self.assertEqual(report["gate"], "restricted")
         self.assertEqual(checks["gate"]["status"], "ok")
 
+    def test_lead_capture_gate_is_detected(self):
+        self.state["access"].update(mode="lead", requireVerification=False,
+                                    leadFields=[{"key": "company", "label": "Company"}])
+        self.state["public_body"] = '<form method="POST" action="/__cresa/lead"><input name="email">'
+        report, checks = self.run_health()
+        self.assertEqual(report["gate"], "lead")
+        self.assertEqual(checks["access"]["status"], "ok")
+        self.assertIn("1 extra fields; email verification off", checks["access"]["detail"])
+        self.assertEqual(checks["gate"]["status"], "ok")
+        self.assertNotIn("og-image", checks)
+
+    def test_lead_policy_without_gate_fails(self):
+        self.state["access"].update(mode="lead", leadFields=[], requireVerification=True)
+        report, checks = self.run_health(expected=2)
+        self.assertEqual(checks["gate"]["status"], "fail")
+        self.assertIn("policy is lead", checks["gate"]["detail"])
+
     def test_pending_upload_expiry_and_404s_warn(self):
         self.state["site"].update(pendingVersionId="sv_pending", expiresAt=iso(timedelta(hours=2)))
         self.state["analytics"]["top404Paths"] = [{"path": "/missing.css", "referrer": "", "hits": 7}]

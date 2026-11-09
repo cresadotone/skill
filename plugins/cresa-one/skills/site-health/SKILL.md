@@ -3,10 +3,11 @@ name: site-health
 description: >-
   Check whether a cresa.one Site is healthy: HTTP reachability, TLS
   certificate, finalized version or stuck upload, publish status, expiry,
-  access gate versus policy, share image, traffic, and recent 404s. Read-only.
-  Use when asked "is my site up", "check my site", "why is my site broken",
-  "is it still live", "did the publish work", "when does it expire", or
-  "who is visiting".
+  access gate versus policy, share image, traffic, and recent 404s; and see
+  who viewed it, with time on page and scroll depth. Read-only. Use when
+  asked "is my site up", "check my site", "why is my site broken", "is it
+  still live", "did the publish work", "when does it expire", "who is
+  visiting", "who viewed my site", or "how long did they spend on it".
 metadata:
   internal: true
 ---
@@ -45,6 +46,20 @@ Each line is `OK`, `WARN`, `FAIL`, or `SKIP` with a check name:
 | `access`, `gate` | Policy and public response disagree, or an empty allowlist | Fix with the `site-access` skill, then rerun |
 | `metadata`, `og-image` | Missing title or share image, or `ogImagePath` not published | `publish.sh --metadata-only` or republish with `og.png` |
 | `analytics` | Recent 404 paths | Fix broken links or add the missing files, then republish |
+
+`gate` recognizes password, restricted, and lead-capture gates. A bad publish that is otherwise healthy can be rolled back (`manage-sites`).
+
+## Who viewed it
+
+```bash
+API=https://cresa.one/api/v1; AUTH="authorization: Bearer $CRESAONE_API_KEY"
+curl -sS "$API/publishes/{slug}/viewers?limit=50" -H "$AUTH" |
+  jq '{identifiedViewers,anonymousVisitors,engagement,viewers:[.viewers[]|{email,verified,views,lastSeenAt,topPaths,country,engagement}]}'
+```
+
+- Identified viewers are restricted and lead viewers plus anyone who opened a recipient link. Anonymous visitors are only counted. `verified:false` means the email was never confirmed. Follow `nextCursor` for more.
+- `engagement` (`trackedViews`, `totalSeconds`, `averageSeconds`, `maxScrollDepth`) stays at zero until the owner turns on `trackEngagement` (`site-access` skill). Anonymous viewers who send Do Not Track or Global Privacy Control are never tracked.
+- Lead form submissions: `GET $API/publishes/{slug}/data/leads`. Open viewer comments: `GET $API/publishes/{slug}/comments`.
 
 ## Report
 

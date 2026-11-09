@@ -189,8 +189,10 @@ if [[ "$curl_rc" -ne 0 ]]; then
     case "$curl_rc" in 35|51|53|54|58|59|60|64|66|77|80|82|83|90|91) add_check tls fail "$reason" ;; esac
   fi
 else
-  if grep -Eq 'action="/__cresa/(unlock|request|verify)"' "$BODY_FILE" 2>/dev/null; then
-    if grep -Fq 'action="/__cresa/unlock"' "$BODY_FILE"; then GATE="password"; else GATE="restricted"; fi
+  if grep -Eq 'action="/__cresa/(unlock|request|verify|lead)"' "$BODY_FILE" 2>/dev/null; then
+    if grep -Fq 'action="/__cresa/unlock"' "$BODY_FILE"; then GATE="password"
+    elif grep -Fq 'action="/__cresa/lead"' "$BODY_FILE"; then GATE="lead"
+    else GATE="restricted"; fi
   fi
   case "$HTTP_CODE" in
     2??)
@@ -309,12 +311,17 @@ else
           if [[ "$((emails + domains))" -eq 0 ]]; then add_check access warn "restricted with an empty allowlist; nobody can sign in"
           else add_check access ok "restricted to $emails emails and $domains domains; public preview $PUBLIC_PREVIEW"; fi
           ;;
+        lead)
+          fields="$(printf '%s' "$API_BODY" | "$JQ_BIN" -r '[.access.leadFields[]?] | length')"
+          verify="$(printf '%s' "$API_BODY" | "$JQ_BIN" -r 'if .access.requireVerification == false then "off" else "on" end')"
+          add_check access ok "lead capture with $fields extra fields; email verification $verify; public preview $PUBLIC_PREVIEW"
+          ;;
         *) add_check access warn "unknown access mode: ${ACCESS_MODE:-missing}" ;;
       esac
       if [[ "$HTTP_CODE" =~ ^2 ]]; then
         if [[ "$ACCESS_MODE" == anyone_with_link && "$GATE" != none ]]; then
           add_check gate fail "policy is anyone_with_link but the public URL shows a $GATE gate"
-        elif [[ "$ACCESS_MODE" == password || "$ACCESS_MODE" == restricted ]] && [[ "$GATE" == none ]]; then
+        elif [[ "$ACCESS_MODE" =~ ^(password|restricted|lead)$ ]] && [[ "$GATE" == none ]]; then
           add_check gate fail "policy is $ACCESS_MODE but the public URL served content without a gate"
         else
           add_check gate ok "public URL matches the $ACCESS_MODE policy"

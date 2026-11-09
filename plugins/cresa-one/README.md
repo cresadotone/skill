@@ -1,6 +1,6 @@
 # cresa.one plugin
 
-Publish Sites with verified access, metadata, and share cards; manage, health-check, and protect them. Keep project files in private account-owned Drives.
+Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Keep project files in private account-owned Drives.
 
 ## Start here
 
@@ -17,11 +17,11 @@ Claude Code exposes each skill as `/cresa-one:<name>`; Codex lists the same skil
 | Skill | Use it to |
 | --- | --- |
 | `/cresa-one:publish` | Publish a website, app, report, or files with metadata, a share card, access, and verification |
-| `/cresa-one:manage-sites` | Find, update, retag, rename, archive, claim, recover, or delete existing Sites |
-| `/cresa-one:site-health` | Run a read-only check: HTTP, TLS, finalize state, status, expiry, access gate, share image, traffic, 404s |
-| `/cresa-one:site-access` | Set a password, restrict to emails or domains, send invites, toggle link previews, or reopen a Site |
+| `/cresa-one:manage-sites` | Find, update, roll back, retag, rename, archive, claim, recover, or delete existing Sites; act on viewer comments; set up webhooks |
+| `/cresa-one:site-health` | Run a read-only check: HTTP, TLS, finalize state, status, expiry, access gate, share image, traffic, 404s; list viewers and engagement |
+| `/cresa-one:site-access` | Set a password, restrict to emails or domains, add a lead-capture gate, send invites or tracked recipient links, turn on view alerts, engagement, or comments, brand the gate, or reopen a Site |
 | `/cresa-one:drive` | Store, read, import, export, and share private files in Drives with scoped tokens |
-| `/cresa-one:domains` | Connect custom domains, read DNS and SSL status, manage the handle and path links |
+| `/cresa-one:domains` | Connect custom domains with self-serve DNS verification and automatic HTTPS, manage the handle and path links |
 | `/cresa-one:site-data` | Collect form and poll records with Site Data, and forward protected paths with proxy routes |
 | `/cresa-one:cresa-one` | The complete core skill: every workflow, API key sign-in, version checks, and the shared runtime |
 
@@ -43,7 +43,7 @@ Paths above are relative to the installed plugin directory. Each focused skill f
 
 Core helpers use Bash, curl, and jq. On Windows they run in Git Bash, which Claude Code on Windows already requires. Complete Site preparation requires Python 3.10+ (`python3`, `python`, or `py -3`). Share-card rendering optionally uses Playwright with Chromium; Pillow is the fallback.
 
-Anonymous Sites are temporary. Owner-managed publishing, metadata, access, and Drive operations require a cresa.one account API key. A Drive owner can share one Drive or folder with another agent through a scoped, revocable Drive token. Keep credentials in the supported credential store or environment, never in chat. No OAuth or MCP server is installed by this plugin.
+Anonymous Sites are temporary. Owner-managed publishing, metadata, access, and Drive operations require a cresa.one account API key. A Drive owner can share one Drive or folder with another agent through a scoped, revocable Drive token. Keep credentials in the supported credential store or environment, never in chat. No OAuth or MCP server is installed by this plugin. For clients without a shell, cresa.one runs a separate remote MCP server at `https://mcp.cresa.one/mcp`; the core skill's "Remote MCP server" section explains how to connect it and which actions wait for approval.
 
 `--privacy private` controls search indexing, referrer policy, and profile listing. Select `--access password` or `--access restricted` when content must be gated. Ship checks protected access before upload and reports the actual expiry returned by the service.
 

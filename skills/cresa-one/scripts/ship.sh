@@ -76,7 +76,8 @@ Open Graph image (first match wins; result is always /og.png, 1200x630)
 Privacy and access
   --privacy private|public   private (default): noindex, no-referrer, removed from your profile list.
                              public: indexable; profile listing untouched unless --list.
-  --access <mode>            anyone_with_link | password | restricted (default: leave unchanged)
+  --access <mode>            anyone_with_link | password | restricted (default: leave unchanged;
+                             a lead-capture Site keeps its gate)
   --password <text>          Password override (prefer $CRESAONE_SITE_PASSWORD)
   --allow-emails a@x,b@y     For --access restricted (full replacement)
   --allow-domains x.com      For --access restricted (full replacement)
@@ -205,8 +206,14 @@ py - "$TARGET" "$STAGE" <<'STAGE_PY'
 import shutil, sys
 from pathlib import Path
 source, dest = map(Path, sys.argv[1:])
+manifest = source / ".cresaone" / "data.json"
 def ignored(directory, names):
-    return [n for n in names if n in {".git", ".cresaone", ".DS_Store", "cresaone_credentials.txt"}
+    # Local state and claim tokens stay here; only the Site Data manifest ships.
+    if Path(directory) == manifest.parent:
+        return [n for n in names if n != manifest.name]
+    keep_manifest = Path(directory) == source and manifest.is_file()
+    return [n for n in names if n in {".git", ".DS_Store", "cresaone_credentials.txt"}
+            or (n == ".cresaone" and not keep_manifest)
             or n == ".env" or n.startswith(".env.")]
 def copy_file(src, dst):
     if Path(src).is_symlink():
@@ -391,7 +398,7 @@ if [[ "$API_STATUS" == 200 ]]; then
   ACTION="update"
   api GET "/api/v1/publish/$LOOKUP_SLUG/access"
   CURRENT_MODE="$(printf '%s' "$API_BODY" | jq -r '.access.mode // empty')"
-  case "$CURRENT_MODE" in anyone_with_link|password|restricted) ;; *) die "unknown Site access mode" ;; esac
+  case "$CURRENT_MODE" in anyone_with_link|password|restricted|lead) ;; *) die "unknown Site access mode" ;; esac
 elif [[ "$LOOKUP_SLUG" != "$SLUG" ]]; then
   die "--rename-from Site was not found"
 fi

@@ -1,8 +1,8 @@
 {
   "name": "cresa-one",
-  "version": "0.4.0",
-  "skillVersion": "1.27.0",
-  "description": "Publish Sites with verified access, metadata, and share cards; manage, health-check, and protect them. Store private files in account-owned Drives. Focused skills plus shared helpers and templates.",
+  "version": "0.5.0",
+  "skillVersion": "1.28.0",
+  "description": "Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Store private files in account-owned Drives. Focused skills plus shared helpers and templates.",
   "author": {
     "name": "cresa.one",
     "email": "hello@cresa.one",
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "cresa.one",
     "shortDescription": "Publish Sites. Keep agent files in private Drives.",
-    "longDescription": "Turn local websites, apps, reports, and files into cresa.one Sites. Prepare HTML metadata and matching Open Graph cards, choose public, password, or restricted access, and verify the resulting Site settings. New protected Sites have access checked before content uploads. Use an offline dry run to review deliverables first.\n\nFocused skills cover publishing, managing existing Sites, read-only health checks, access control and invites, Drives, custom domains and links, and Site Data with proxy routes. They share one bundled runtime of helpers, templates, and reference docs.\n\nStore documents, context, and assets in private account-owned Drives, and share one Drive or folder with another agent through scoped, revocable Drive tokens. The standalone installers (install.sh, and install.ps1 for Windows) also produce portable .skill and .zip archives.\n\nPublishing and Drive operations use the cresa.one API. Anonymous Sites are temporary; owner-managed operations require an account API key. Helpers run in Bash (Git Bash on Windows). Python 3.10+ is required for complete Site preparation. Browser-rendered share cards optionally use Playwright, with a Pillow fallback.",
+    "longDescription": "Turn local websites, apps, reports, and files into cresa.one Sites. Prepare HTML metadata and matching Open Graph cards, choose public, password, or restricted access, and verify the resulting Site settings. New protected Sites have access checked before content uploads. Use an offline dry run to review deliverables first.\n\nFocused skills cover publishing; managing existing Sites, including version rollback, viewer comments, and signed webhooks; read-only health checks and viewer lists; access control with passwords, invites, lead capture, tracked recipient links, and gate branding; Drives; self-serve custom domains with automatic HTTPS; and Site Data with proxy routes. They share one bundled runtime of helpers, templates, and reference docs.\n\nStore documents, context, and assets in private account-owned Drives, and share one Drive or folder with another agent through scoped, revocable Drive tokens. The standalone installers (install.sh, and install.ps1 for Windows) also produce portable .skill and .zip archives.\n\nPublishing and Drive operations use the cresa.one API. Anonymous Sites are temporary; owner-managed operations require an account API key. Helpers run in Bash (Git Bash on Windows). Python 3.10+ is required for complete Site preparation. Browser-rendered share cards optionally use Playwright, with a Pillow fallback.",
     "developerName": "cresa.one",
     "category": "Productivity",
     "capabilities": [

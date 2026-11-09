@@ -70,6 +70,9 @@ done
 if [[ -n "${MOCK_RETRY_DIR:-}" ]]; then
   printf '%s %s\n' "$method" "$url" >> "$MOCK_RETRY_DIR/requests"
 fi
+if [[ -n "${MOCK_BODY_LOG:-}" && -n "$data" ]]; then
+  printf '%s\n' "$data" >> "$MOCK_BODY_LOG"
+fi
 
 emit_json() {
   printf '%s\n' "$1"
@@ -229,6 +232,18 @@ if [[ "$TEST_SUITE" == all ]]; then
   assert_contains "$TEST_ROOT/stderr" "live file verification passed"
   jq -e '.publishes.demo.siteUrl == "https://demo.mock.test"' \
     "$TEST_ROOT/site/.cresaone/state.json" >/dev/null || fail "publish state was not saved"
+
+  # The Site Data manifest ships but is never fetched back; local state stays local.
+  mkdir -p "$TEST_ROOT/data-site/.cresaone"
+  cp "$TEST_ROOT/site/index.html" "$TEST_ROOT/data-site/index.html"
+  printf '{"version":1,"collections":{"responses":{"fields":{"name":{"type":"string"}}}}}\n' \
+    > "$TEST_ROOT/data-site/.cresaone/data.json"
+  printf '{"publishes":{"demo":{"claimToken":"secret"}}}\n' > "$TEST_ROOT/data-site/.cresaone/state.json"
+  MOCK_BODY_LOG="$TEST_ROOT/publish-bodies" assert_status 0 run_publish "$TEST_ROOT/data-site" --slug demo
+  assert_contains "$TEST_ROOT/stderr" "verifying 1 live files"
+  assert_contains "$TEST_ROOT/stderr" "live file verification passed"
+  jq -se 'map(.files // []) | add | map(.path) | index(".cresaone/data.json") != null and index(".cresaone/state.json") == null' \
+    "$TEST_ROOT/publish-bodies" >/dev/null || fail "manifest was not uploaded, or local state was"
 
   assert_status 0 run_publish "$TEST_ROOT/site" --slug demo --title "Test Site" \
     --tags '[" CRE ","cre","","this-tag-is-longer-than-thirty-two-characters"]'

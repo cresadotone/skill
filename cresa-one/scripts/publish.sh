@@ -612,7 +612,8 @@ elif [[ -d "$TARGET" ]]; then
     rel="${f#$TARGET/}"
     [[ "$rel" == ".DS_Store" ]] && continue
     [[ "$(basename "$rel")" == ".DS_Store" ]] && continue
-    [[ "$rel" == .cresaone/* ]] && continue
+    # Local state and claim tokens stay here; only the Site Data manifest ships.
+    [[ "$rel" == .cresaone/* && "$rel" != ".cresaone/data.json" ]] && continue
     sz=$(wc -c < "$f" | tr -d ' ')
     ct=$(guess_content_type "$f")
     h=$(compute_sha256 "$f")
@@ -631,7 +632,7 @@ file_count=$(echo "$FILES_JSON" | "$JQ_BIN" 'length')
 verify_live_files() {
   local slug="$1"
   local site_url="$2"
-  local selected selected_count failures=0 index=0
+  local verifiable verifiable_count selected selected_count failures=0 index=0
   local temp_dir file_path expected_type local_file encoded_path verify_url headers_file body_file
   local http_code actual_type local_hash live_hash local_size live_size normalized_expected normalized_actual
 
@@ -648,15 +649,18 @@ verify_live_files() {
     fi
   fi
 
-  selected=$(printf '%s' "$FILES_JSON" | "$JQ_BIN" -c --argjson limit "$VERIFY_LIMIT" --arg og "${OG_IMAGE_PATH#/}" '
+  # Visitors can never fetch the Site Data manifest, so it has no live bytes to compare.
+  verifiable=$(printf '%s' "$FILES_JSON" | "$JQ_BIN" -c 'map(select(.path != ".cresaone/data.json"))')
+  verifiable_count=$(printf '%s' "$verifiable" | "$JQ_BIN" 'length')
+  selected=$(printf '%s' "$verifiable" | "$JQ_BIN" -c --argjson limit "$VERIFY_LIMIT" --arg og "${OG_IMAGE_PATH#/}" '
     ([.[0:$limit][]] + [.[] | select(
       ((.contentType // "") | startswith("text/html")) or
       ($og != "" and .path == $og)
     )]) | unique_by(.path)
   ')
   selected_count=$(printf '%s' "$selected" | "$JQ_BIN" 'length')
-  if [[ "$selected_count" -lt "$file_count" ]]; then
-    echo "verifying $selected_count of $file_count files (first $VERIFY_LIMIT plus all HTML and selected OG image)..." >&2
+  if [[ "$selected_count" -lt "$verifiable_count" ]]; then
+    echo "verifying $selected_count of $verifiable_count files (first $VERIFY_LIMIT plus all HTML and selected OG image)..." >&2
   else
     echo "verifying $selected_count live files..." >&2
   fi

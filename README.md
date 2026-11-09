@@ -18,11 +18,11 @@ The plugin ships focused skills that share one bundled runtime:
 | Skill | Use it to |
 | --- | --- |
 | `/cresa-one:publish` | Publish a website, app, report, or files with metadata, a share card, access, and verification |
-| `/cresa-one:manage-sites` | Find, update, retag, rename, archive, claim, recover, or delete existing Sites |
-| `/cresa-one:site-health` | Run a read-only check: HTTP, TLS, finalize state, status, expiry, access gate, share image, traffic, 404s |
-| `/cresa-one:site-access` | Set a password, restrict to emails or domains, send invites, toggle link previews |
+| `/cresa-one:manage-sites` | Find, update, roll back, retag, rename, archive, claim, recover, or delete existing Sites; act on viewer comments; set up webhooks |
+| `/cresa-one:site-health` | Run a read-only check: HTTP, TLS, finalize state, status, expiry, access gate, share image, traffic, 404s; list viewers and engagement |
+| `/cresa-one:site-access` | Set a password, restrict to emails or domains, add a lead-capture gate, send invites or tracked recipient links, turn on view alerts, engagement, or comments, brand the gate, toggle link previews |
 | `/cresa-one:drive` | Store and share private files in Drives with scoped, revocable tokens |
-| `/cresa-one:domains` | Connect custom domains and manage the handle and path links |
+| `/cresa-one:domains` | Connect custom domains with automatic HTTPS and manage the handle and path links |
 | `/cresa-one:site-data` | Collect form records with Site Data and forward protected paths with proxy routes |
 | `/cresa-one:cresa-one` | The complete core skill and shared runtime |
 
@@ -125,7 +125,7 @@ Full documentation: **https://cresa.one/docs**
 
 ## Complete Site publishing
 
-Version 1.27.0 includes `ship.sh`, `site-health.sh`, `inject-meta.py`, `og-card.py`, and `reference/ship.md` in every install and portable archive. For authenticated HTML Sites:
+Version 1.28.0 includes `ship.sh`, `site-health.sh`, `inject-meta.py`, `og-card.py`, and `reference/ship.md` in every install and portable archive. For authenticated HTML Sites:
 
 ```bash
 bash ./cresa-one/scripts/ship.sh ./site --slug market-rent-calculator \
@@ -141,7 +141,21 @@ Ship reserves new protected Sites without publishing content, verifies access be
 bash ./cresa-one/scripts/site-health.sh market-rent-calculator
 ```
 
-Read-only report on HTTP, TLS and certificate expiry, publish status, finalized or pending versions, expiry, access gate versus policy, share image, traffic, and recent 404 paths. Public checks need no key; owner checks use the account API key. Add `--json` for machine-readable output.
+Read-only report on HTTP, TLS and certificate expiry, publish status, finalized or pending versions, expiry, access gate (password, restricted, or lead capture) versus policy, share image, traffic, and recent 404 paths. Public checks need no key; owner checks use the account API key. Add `--json` for machine-readable output.
+
+## Viewers, feedback, and rollback
+
+The skill also teaches agents to:
+
+- roll a Site back to an earlier finalized version with no re-upload;
+- gate a Site behind a lead-capture form, email the owner when identified viewers open it, and list those viewers;
+- send each person a tracked, revocable recipient link;
+- turn on engagement tracking and viewer comments, then work through comments: revise, republish, reply, and resolve;
+- brand the access gate, set up signed webhooks, and connect custom domains with automatic HTTPS.
+
+## Remote MCP server
+
+Clients without a shell, such as Claude.ai and Claude Desktop, can use cresa.one through its remote MCP server at `https://mcp.cresa.one/mcp`: add it as a custom connector, sign in with an emailed cresa.one code, and choose read-only or full access. In Claude Code: `claude mcp add --transport http cresa-one https://mcp.cresa.one/mcp`, then `/mcp`. Deletes, access changes, and other sensitive actions wait for a person to approve them. This plugin does not install the server.
 
 ## Site Metadata
 

@@ -218,6 +218,25 @@ class ShipTests(unittest.TestCase):
         files = next(e for e in self.events if e["kind"]=="upload")["files"]
         self.assertEqual(files, ["index.html"])
 
+    def test_site_data_manifest_ships_and_local_state_stays(self):
+        (self.site/".cresaone").mkdir()
+        (self.site/".cresaone/data.json").write_text('{"version":1,"collections":{}}')
+        (self.site/".cresaone/state.json").write_text('{"publishes":{"demo-site":{"claimToken":"secret"}}}')
+        (self.site/"nested/.cresaone").mkdir(parents=True)
+        (self.site/"nested/.cresaone/data.json").write_text("{}")
+        self.run_ship()
+        files = next(e for e in self.events if e["kind"]=="upload")["files"]
+        self.assertIn(".cresaone/data.json", files)
+        self.assertNotIn(".cresaone/state.json", files)
+        self.assertFalse([f for f in files if f.startswith("nested/")])
+
+    def test_cresaone_folder_without_manifest_stays_local(self):
+        (self.site/".cresaone").mkdir()
+        (self.site/".cresaone/state.json").write_text('{"publishes":{}}')
+        self.run_ship()
+        files = next(e for e in self.events if e["kind"]=="upload")["files"]
+        self.assertEqual(files, ["index.html"])
+
     def test_invalid_tags_fail_before_network(self):
         self.run_ship("--tags",'[1]',expected=1)
         self.assertEqual(self.events, [])
@@ -237,6 +256,20 @@ class ShipTests(unittest.TestCase):
         upload = next(e for e in self.events if e["kind"]=="upload")
         self.assertEqual(upload["mode"],"restricted")
         self.assertIn("--no-verify",upload["args"])
+
+    def test_existing_lead_capture_site_keeps_access(self):
+        self.state.update(exists=True,mode="lead")
+        report = json.loads(self.run_ship().stdout)
+        upload = next(e for e in self.events if e["kind"]=="upload")
+        self.assertEqual(upload["mode"],"lead")
+        self.assertIn("--no-verify",upload["args"])
+        self.assertFalse(any(e.get("method")=="PATCH" and e["path"].endswith("/access") for e in self.events))
+        self.assertEqual(report["access"],"lead")
+
+    def test_lead_capture_site_cannot_be_listed(self):
+        self.state.update(exists=True,mode="lead")
+        self.run_ship("--list",expected=1)
+        self.assertFalse(any(e["kind"]=="upload" for e in self.events))
 
     def test_help_succeeds(self):
         result = subprocess.run(["bash",str(self.bundle/"scripts/ship.sh"),"--help"],capture_output=True,text=True)

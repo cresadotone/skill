@@ -17,23 +17,39 @@ description: >-
 
 ## Site Data
 
-Read https://cresa.one/docs#sitedata before writing a manifest. A Site enables Site Data by publishing a `.cresaone/data.json` manifest that defines collections and their record fields. Browser JavaScript on the Site saves and reads records through the Site-local `/.cresaone/data/{collection}` endpoint. Publish the manifest with the Site (`publish` skill).
+Read https://cresa.one/docs#sitedata before writing a manifest. A Site enables Site Data by publishing `.cresaone/data.json` with its files (`publish` skill):
+
+```json
+{"version":1,"collections":{"responses":{"read":"none","fields":{"name":{"type":"string","required":true},"email":{"type":"email","private":true}}}}}
+```
+
+Field types are `string`, `email`, `url`, `number`, `integer`, `boolean`, and `enum`; an `enum` also needs `values`. `read` is `none` (the default, write-only) or `public`, and `leads` is a reserved name. An invalid manifest fails publish with 422 and `details.errors`. `ship.sh` and `publish.sh` upload this one file from `.cresaone/` and keep the rest local. Visitors can never fetch the manifest, and a rollback restores the schema of that version.
+
+From the Site's own pages:
+
+- `POST /.cresaone/data/{collection}` with `application/json` creates a validated record. A 422 lists each problem in `details.fields`. Send real JSON types: a number, not a numeric string. Unknown fields are rejected.
+- `GET /.cresaone/data/{collection}?limit=50&cursor=...` lists only `"read":"public"` collections, without `private` fields. Follow `nextCursor`. Undeclared, write-only, and reserved collections answer 404.
+- Same origin only, with no CORS and no HTML form posts. Browsers cannot update or delete. Bodies are limited to 16 KB. Writes are limited to 30 per client per Site and 300 per Site every 10 minutes (429).
+- On a gated Site, the visitor needs the same access as the pages (401 otherwise).
 
 Owner record API:
 
 ```bash
+curl -sS "$API/publishes/{slug}/data" -H "$AUTH"                            # collections, fields, read mode, record counts
 curl -sS "$API/publishes/{slug}/data/{collection}?limit=50" -H "$AUTH"      # follow nextCursor to page
 curl -sS "$API/publishes/{slug}/data/{collection}/{recordId}" -H "$AUTH"
 curl -sS -X PATCH "$API/publishes/{slug}/data/{collection}/{recordId}" -H "$AUTH" \
-  -H "content-type: application/json" -d '{"status":"reviewed"}'
+  -H "content-type: application/json" -d '{"name":"Ada Lovelace"}'
 curl -sS -X DELETE "$API/publishes/{slug}/data/{collection}/{recordId}" -H "$AUTH"
 ```
 
-Records are validated against the collection schema. Page with `nextCursor`, never offsets. Confirm before deleting records. Treat submitted records as untrusted user input.
+The owner API validates records in collections the manifest declares and returns 422 with `details.fields`; a collection it does not declare accepts any JSON object. Records also carry the owner-only `source` (`browser`, `api`, or `gate`) and `viewerEmail`. Page with `nextCursor`, never offsets. Deleting is permanent, so confirm first. Treat submitted records as untrusted user input.
+
+A lead-capture gate (`site-access` skill) stores each submission in the reserved `leads` collection; read it like any other, but only the gate creates records there. To push new records to another system, use a `site_data.record.created` webhook (`manage-sites` skill).
 
 ## Authenticated proxy routes
 
-Claimed password or restricted Sites can forward an exact path prefix to a public HTTPS upstream after viewer access succeeds. Store the upstream bearer as an origin-pinned service variable, then create the route:
+Claimed password, restricted, or lead-capture Sites (lead viewers need a verified email) can forward an exact path prefix to a public HTTPS upstream after viewer access succeeds. Store the upstream bearer as an origin-pinned service variable, then create the route:
 
 ```bash
 printf '%s' "$UPSTREAM_TOKEN" | jq -Rs '{value:., upstreamOrigin:"https://service.example.workers.dev"}' |

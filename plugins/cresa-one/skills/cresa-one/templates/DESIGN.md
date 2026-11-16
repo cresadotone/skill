@@ -72,6 +72,8 @@ spacing:
   margin-desktop: 48px
 ---
 
+> **Sample, not Cresa's brand.** This is the SF Ownership Desk house style for cresa.one apps and plan pages. For Cresa client work, use the `cresa-brand-guidelines` skill (Midnight, Goldenrod, near-black dark mode).
+
 # Design System: SF Ownership Desk
 
 ## 1. Visual Theme & Atmosphere

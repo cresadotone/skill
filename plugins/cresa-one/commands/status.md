@@ -17,6 +17,11 @@ bundled skill version, the skill folders under `${CLAUDE_PLUGIN_ROOT}/skills/`
 
 On Windows, say that the helpers run in Git Bash.
 
+The plugin also connects MCP server `cresa-one` at `https://mcp.cresa.one/mcp`
+(Streamable HTTP, OAuth). No API key is stored in the plugin files. In Claude
+Code, `/mcp` starts sign-in. Codex and Cursor use their own MCP sign-in for
+that server.
+
 If the user asks whether an update is available, fetch
 `https://cresa.one/api/skill/version` with `curl -fsSL --max-time 3`. Report
 unavailable metadata without treating the plugin as broken. That endpoint reports

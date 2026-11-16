@@ -41,14 +41,20 @@ codex plugin marketplace add cresadotone/skill
 codex plugin add cresa-one@cresa-one
 ```
 
-The plugin appears as **cresa.one**, with prompt starters, a composer icon, and three preview screenshots. Start a new task after installing or updating to load the new skills.
+The plugin appears as **cresa.one**, with prompt starters, a composer icon, and three preview screenshots. Codex reads root `plugin.json` and `mcp.json`. Sign-in for the bundled MCP server is OAuth. Start a new task after installing or updating to load the new skills.
 
 ```bash
 codex plugin marketplace upgrade cresa-one
 codex plugin add cresa-one@cresa-one
 ```
 
-Both marketplaces install the same self-contained `plugins/cresa-one/` package. It includes the canonical skill and runtime under `skills/cresa-one/`, the focused skills beside it (each one `SKILL.md` that runs `../cresa-one/scripts/`), matching assets, and a plugin-specific status command. Plugin release metadata lives in [plugin.config.json](plugin.config.json); skill versions are tracked separately.
+## Cursor plugin
+
+Cursor loads this repository through `.cursor-plugin/plugin.json` at the repo root. That manifest points at the same skills, status command, and MCP config as the marketplace package. One install includes all three. The MCP server is remote, so the package does not use `${PLUGIN_ROOT}`. Cursor does not expand that variable; when a path is required it expands `${CURSOR_PLUGIN_ROOT}`.
+
+From a checkout of this repo, copy `plugins/cresa-one` to `~/.cursor/plugins/local/cresa-one`, reload Cursor, and confirm it in Customize. That folder is also a complete plugin on its own (root `plugin.json`, `.cursor-plugin/plugin.json`, and `mcp.json`). Sign in when Cursor asks.
+
+Claude Code and Codex marketplaces install the same self-contained `plugins/cresa-one/` package. It includes the canonical skill and runtime under `skills/cresa-one/`, the focused skills beside it (each one `SKILL.md` that runs `../cresa-one/scripts/`), matching assets, a plugin-specific status command, and the remote MCP server. Plugin release metadata lives in [plugin.config.json](plugin.config.json); skill versions are tracked separately.
 
 The focused skills ship only in the plugin. The standalone channels below install the single `cresa-one` skill, which already covers every workflow: archives, Hermes, and uploaded skills hold one skill folder and cannot reach a sibling runtime.
 
@@ -155,7 +161,7 @@ The skill also teaches agents to:
 
 ## Remote MCP server
 
-Clients without a shell, such as Claude.ai and Claude Desktop, can use cresa.one through its remote MCP server at `https://mcp.cresa.one/mcp`: add it as a custom connector, sign in with an emailed cresa.one code, and choose read-only or full access. In Claude Code: `claude mcp add --transport http cresa-one https://mcp.cresa.one/mcp`, then `/mcp`. Deletes, access changes, and other sensitive actions wait for a person to approve them. This plugin does not install the server.
+The plugin install connects the remote MCP server at `https://mcp.cresa.one/mcp` (Streamable HTTP). Sign in with an emailed cresa.one code and choose read-only or full access. Claude Code reads `.mcp.json` and then `/mcp`. Codex reads the auth block in `mcp.json` (OAuth, dynamic client registration). Cursor reads the same `mcp.json`. The package contains no API key or token. Clients that only have the standalone skill, such as Claude.ai, still add the URL as a custom connector. Deletes, access changes, and other sensitive actions wait for a person to approve them.
 
 ## Site Metadata
 

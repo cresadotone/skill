@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "cresa-one": {
+      "type": "http",
+      "url": "https://mcp.cresa.one/mcp",
+      "oauth": {
+        "scopes": "cresa:read cresa:write"
+      }
+    }
+  }
+}

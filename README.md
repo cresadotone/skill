@@ -25,6 +25,7 @@ The plugin ships focused skills that share one bundled runtime:
 | `/cresa-one:domains` | Connect custom domains with automatic HTTPS and manage the handle and path links |
 | `/cresa-one:site-data` | Collect form records with Site Data and forward protected paths with proxy routes |
 | `/cresa-one:cresa-one` | The complete core skill and shared runtime |
+| `/cresa-one:setup` | Finish a new install and confirm the Site card |
 
 `/cresa-one:status` shows bundled versions and helper paths. Agents also choose these skills automatically from the request. Update through the plugin manager:
 
@@ -41,7 +42,7 @@ codex plugin marketplace add cresadotone/skill
 codex plugin add cresa-one@cresa-one
 ```
 
-The plugin appears as **cresa.one**, with prompt starters, a composer icon, and three preview screenshots. Codex reads root `plugin.json` and `mcp.json`. Sign-in for the bundled MCP server is OAuth. Start a new task after installing or updating to load the new skills.
+The plugin appears as **cresa.one**, with prompt starters, a composer icon, the existing logo, and three preview screenshots. Codex reads root `plugin.json` and `mcp.json`. Sign-in for the bundled MCP server is OAuth dynamic client registration. The `setup` skill is the onboarding skill. `show_site` draws an MCP Apps card on hosts that support it and returns the same JSON everywhere else. Start a new task after installing or updating to load the new skills. Lifecycle hooks in this package make it ineligible for the public OpenAI plugin directory until `hooks/` is removed.
 
 ```bash
 codex plugin marketplace upgrade cresa-one
@@ -50,7 +51,7 @@ codex plugin add cresa-one@cresa-one
 
 ## Cursor plugin
 
-Cursor loads this repository through `.cursor-plugin/plugin.json` at the repo root. That manifest points at the same skills, status command, and MCP config as the marketplace package. One install includes all three. The MCP server is remote, so the package does not use `${PLUGIN_ROOT}`. Cursor does not expand that variable; when a path is required it expands `${CURSOR_PLUGIN_ROOT}`.
+Cursor loads this repository through `.cursor-plugin/plugin.json` at the repo root and through `.cursor-plugin/marketplace.json`. Those manifests point at the same skills, status command, publisher agent, publishing rule, hook, and MCP config as the package. One install includes the skills and the remote MCP server. The MCP server is remote, so the package does not use `${PLUGIN_ROOT}` and does not declare a token variable. Cursor does not expand `${PLUGIN_ROOT}`; when a path is required it expands `${CURSOR_PLUGIN_ROOT}`.
 
 From a checkout of this repo, copy `plugins/cresa-one` to `~/.cursor/plugins/local/cresa-one`, reload Cursor, and confirm it in Customize. That folder is also a complete plugin on its own (root `plugin.json`, `.cursor-plugin/plugin.json`, and `mcp.json`). Sign in when Cursor asks.
 
@@ -60,7 +61,7 @@ The focused skills ship only in the plugin. The standalone channels below instal
 
 ### Test a local checkout
 
-From the private repository root, replace the marketplace source with `./skill` in either platform's add command. For Claude: `/plugin marketplace add ./skill`; for Codex: `codex plugin marketplace add ./skill`. In a checkout of the public mirror, use `.`. These commands register a local marketplace; use the public source when installing a released version.
+From the private repository root, replace the marketplace source with `./skill` in either platform's add command. For Claude: `/plugin marketplace add ./skill`; for Codex: `codex plugin marketplace add ./skill`. In a checkout of the public mirror, use `.`. Cursor: copy `plugins/cresa-one` to `~/.cursor/plugins/local/cresa-one`, or load the checkout whose `.cursor-plugin/marketplace.json` lists `plugins/cresa-one`. These commands register a local marketplace; use the public source when installing a released version.
 
 ### Preview gallery
 
@@ -101,7 +102,7 @@ The standalone installers do not update plugin caches. Use the platform's plugin
 | Install | `install.ps1` installs to `%USERPROFILE%\.claude\skills\cresa-one` with a checksum-verified `bin\jq.exe`, the `/cresa-one` command, and both portable archives. Running `install.sh` from Git Bash hands off to it. |
 | Helpers | `ship.sh`, `publish.sh`, `drive.sh`, and `site-health.sh` run in Git Bash (bundled with Git for Windows, which Claude Code on Windows requires). They convert paths for native `curl`, `jq.exe`, and Python and accept `python3`, `python`, or `py -3`. |
 | Auto-update | `/cresa-one` runs `install.ps1` through PowerShell on Windows and `install.sh` elsewhere. |
-| Plugins | Claude Code and Codex plugins install through their plugin managers on every platform. |
+| Plugins | Claude Code, Codex, and Cursor plugins install through their plugin managers on every platform. |
 | Not supported | Symlinks into other agents' skill folders (copy the folder instead), and Windows on Arm without x64 emulation (no native jq build). |
 
 Each fallback install/update also packages portable archives at `~/.claude/skills/cresa-one/packages/` (`%USERPROFILE%\.claude\skills\cresa-one\packages\` on Windows):

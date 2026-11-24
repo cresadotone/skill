@@ -1,6 +1,6 @@
 {
   "name": "cresa-one",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Store private files in account-owned Drives. Focused skills plus shared helpers and templates. Connects the remote MCP server.",
   "author": {
     "name": "cresa.one",
@@ -40,6 +40,7 @@
       "Store private files"
     ],
     "websiteURL": "https://cresa.one",
+    "supportURL": "https://github.com/cresadotone/skill/issues",
     "brandColor": "#000000",
     "brandColorDark": "#FFFFFF",
     "composerIcon": "./assets/icon.png",
@@ -56,5 +57,7 @@
       "Restrict this Site, add a lead-capture gate, and verify access.",
       "Check Site health, roll a version back, or store files in a Drive."
     ]
-  }
+  },
+  "onboardingSkill": "./plugins/cresa-one/skills/setup/SKILL.md",
+  "hooks": "./hooks/codex-hooks.json"
 }

@@ -1,6 +1,6 @@
 {
   "name": "cresa-one",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Store private files in account-owned Drives. Focused skills plus shared helpers and templates. Connects the remote MCP server.",
   "author": {
     "name": "cresa.one",
@@ -25,5 +25,8 @@
   ],
   "logo": "assets/logo.svg",
   "skills": "./skills/",
-  "commands": "./commands/"
+  "commands": "./commands/",
+  "agents": "./agents/",
+  "rules": "./rules/",
+  "hooks": "./hooks/cursor-hooks.json"
 }

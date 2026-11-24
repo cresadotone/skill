@@ -1,0 +1,6 @@
+---
+description: Use the cresa.one plugin skills and the OAuth MCP server for Sites and Drives. Never paste API keys.
+alwaysApply: true
+---
+
+cresa.one: for publishing, access, domains, Site Data, or Drives, follow the bundled cresa-one skills. Live calls use the remote MCP server and OAuth. Do not paste API keys, Drive tokens, or client secrets into chat or into plugin files. Ask for an offline dry run before the first upload. Use the show_site tool when a host can show the Site card.

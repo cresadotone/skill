@@ -1,0 +1,54 @@
+{
+  "name": "cresa-one",
+  "owner": {
+    "name": "cresa.one",
+    "email": "hello@cresa.one"
+  },
+  "metadata": {
+    "description": "Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Store private files in account-owned Drives. Focused skills plus shared helpers and templates. Connects the remote MCP server.",
+    "version": "0.7.0"
+  },
+  "plugins": [
+    {
+      "name": "cresa-one",
+      "version": "0.7.0",
+      "description": "Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Store private files in account-owned Drives. Focused skills plus shared helpers and templates. Connects the remote MCP server.",
+      "author": {
+        "name": "cresa.one",
+        "email": "hello@cresa.one",
+        "url": "https://cresa.one"
+      },
+      "homepage": "https://github.com/cresadotone/skill#readme",
+      "repository": "https://github.com/cresadotone/skill",
+      "license": "MIT",
+      "keywords": [
+        "cresa.one",
+        "publishing",
+        "sites",
+        "static-hosting",
+        "open-graph",
+        "private-storage",
+        "drives",
+        "claude-code",
+        "codex",
+        "cursor",
+        "mcp"
+      ],
+      "source": "plugins/cresa-one",
+      "category": "Productivity",
+      "tags": [
+        "cresa.one",
+        "publishing",
+        "sites",
+        "static-hosting",
+        "open-graph",
+        "private-storage",
+        "drives",
+        "claude-code",
+        "codex",
+        "cursor",
+        "mcp"
+      ]
+    }
+  ]
+}

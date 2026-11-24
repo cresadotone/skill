@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./plugins/cresa-one/hooks/session-start.sh"
+      }
+    ]
+  }
+}

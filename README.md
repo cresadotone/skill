@@ -25,7 +25,7 @@ The plugin ships focused skills that share one bundled runtime:
 | `/cresa-one:domains` | Connect custom domains with automatic HTTPS and manage the handle and path links |
 | `/cresa-one:site-data` | Collect form records with Site Data and forward protected paths with proxy routes |
 | `/cresa-one:cresa-one` | The complete core skill and shared runtime |
-| `/cresa-one:setup` | Finish a new install and confirm the Site card |
+| `/cresa-one:setup` | First run: permissions, sign-in, one Site, an update of that same link, and a copy-link close |
 
 `/cresa-one:status` shows bundled versions and helper paths. Agents also choose these skills automatically from the request. Update through the plugin manager:
 
@@ -42,7 +42,7 @@ codex plugin marketplace add cresadotone/skill
 codex plugin add cresa-one@cresa-one
 ```
 
-The plugin appears as **cresa.one**, with prompt starters, a composer icon, the existing logo, and three preview screenshots. Codex reads root `plugin.json` and `mcp.json`. Sign-in for the bundled MCP server is OAuth dynamic client registration. The `setup` skill is the onboarding skill. `show_site` draws an MCP Apps card on hosts that support it and returns the same JSON everywhere else. Start a new task after installing or updating to load the new skills. Lifecycle hooks in this package make it ineligible for the public OpenAI plugin directory until `hooks/` is removed.
+The plugin appears as **cresa.one**, with prompt starters, a composer icon, the existing logo, and three preview screenshots. Codex reads root `plugin.json` and `mcp.json`. Sign-in for the bundled MCP server is OAuth dynamic client registration. The `setup` skill is the onboarding skill: it states what the connection can read, change, and send, publishes one Site, then updates that same link. `show_site` draws an MCP Apps card on hosts that support it and returns the same JSON everywhere else. Pass `onboarding: true` for the first-run stepper. Start a new task after installing or updating to load the new skills. Lifecycle hooks in this package make it ineligible for the public OpenAI plugin directory until `hooks/` is removed.
 
 ```bash
 codex plugin marketplace upgrade cresa-one
@@ -162,7 +162,7 @@ The skill also teaches agents to:
 
 ## Remote MCP server
 
-The plugin install connects the remote MCP server at `https://mcp.cresa.one/mcp` (Streamable HTTP). Sign in with an emailed cresa.one code and choose read-only or full access. Claude Code reads `.mcp.json` and then `/mcp`. Codex reads the auth block in `mcp.json` (OAuth, dynamic client registration). Cursor reads the same `mcp.json`. The package contains no API key or token. Clients that only have the standalone skill, such as Claude.ai, still add the URL as a custom connector. Deletes, access changes, and other sensitive actions wait for a person to approve them.
+The plugin install connects the remote MCP server at `https://mcp.cresa.one/mcp` (Streamable HTTP). Sign in with an emailed cresa.one code. The plugin asks for read and write. The consent page lets you grant read-only instead, and a later change asks you to allow writes. Claude Code reads `.mcp.json` and then `/mcp`. Codex reads the auth block in `mcp.json` (OAuth, dynamic client registration). Cursor reads the same `mcp.json`. The package contains no API key or token. The connection is a revocable API key whose secret stays in the client. Clients that only have the standalone skill, such as Claude.ai, still add the URL as a custom connector. Deletes, access changes, and other sensitive actions wait for a person to approve them.
 
 ## Site Metadata
 

@@ -829,11 +829,11 @@ The user connects it:
 - Claude Code: `claude mcp add --transport http cresa-one https://mcp.cresa.one/mcp`, then run `/mcp` to sign in.
 - Other clients: add `https://mcp.cresa.one/mcp` as a remote MCP server with OAuth.
 
-Sign-in uses the same emailed cresa.one code. Each connection gets its own API key, named `MCP: <client>` under API keys in the dashboard; revoking that key disconnects the client.
+Sign-in uses the same emailed cresa.one code. The plugin files contain no API key. Each connection gets its own API key, named `MCP: <client>` under API keys in the dashboard. The secret stays in the connection. You never see or paste it. Revoking that key disconnects the client.
 
-The consent page asks what the connection may do: **Read and make changes** (the default) or **Read only**. A read-only connection can read the account and run code that only reads. A write is refused before it is sent, and the client can ask the user to allow changes by signing in again.
+The plugin asks for read and write. The consent page lets you grant read-only instead, and a later change asks you to allow writes. The consent page asks what the connection may do: **Read and make changes** (the default) or **Read only**. A read-only connection can read the account and run code that only reads. A write is refused before it is sent, and the client can ask the user to allow changes by signing in again.
 
-The server's tools are `search` and `describe` (find API methods), `execute` (run a short script against them), `show_site` (one Site or the recent Sites with 30 days of traffic, as a card in clients that can show one), `snippets`, `save_snippet`, and `delete_snippet` (keep scripts that worked), and `approve`, `reject`, `pending`, `history`, and `rollback`.
+The server's tools are `search`, `describe`, `execute`, `show_site`, `snippets`, `save_snippet`, `delete_snippet`, `approve`, `reject`, `pending`, `history`, `rollback`, `ShowContent`, `manage_files`, `GetNotes`, `GetSite`, `get_skills`, `search_skill_library`, `CreateSite`, `DeleteNote`, `EditSite`, `SaveNote`, `UpdateNote`, `manage_sites`, `manage_skill`, `submit_feedback`, `complete_upload`, `create_presigned_upload`, `fetch_site_html`, `get_image_gallery`, `inline_edit_site`, and `notify_made_with_send_click`. CreateSite and EditSite publish HTML and keep the same URL. SaveNote, GetNotes, UpdateNote, and DeleteNote keep private Drive notes. App-only tools are hidden from the model.
 
 Prompts appear as slash commands in clients that support them, each with its context attached: `publish`, `site-report`, `share-site`, `connect-domain`, and `approvals`.
 

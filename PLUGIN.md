@@ -23,8 +23,10 @@ Claude Code exposes each skill as `/cresa-one:<name>`; Codex lists the same skil
 | `/cresa-one:drive` | Store, read, import, export, and share private files in Drives with scoped tokens |
 | `/cresa-one:domains` | Connect custom domains with self-serve DNS verification and automatic HTTPS, manage the handle and path links |
 | `/cresa-one:site-data` | Collect form and poll records with Site Data, and forward protected paths with proxy routes |
-| `/cresa-one:cresa-one` | The complete core skill: every workflow, API key sign-in, version checks, and the shared runtime |
-| `/cresa-one:setup` | Finish a new install: OAuth sign-in, where credentials live, and the Site card |
+| `/cresa-one:cresa-one` | The complete core skill: every workflow, version checks, and the shared runtime. Plugin sign-in is the emailed code |
+| `/cresa-one:setup` | First run: permissions, emailed-code sign-in, one real Site, an update of that same link, a remembered preference, and a copy-link close |
+| `/cresa-one:creating-sites` | Publish and update one HTML Site in place with CreateSite and EditSite, then files, skills, lead capture, and view alerts |
+| `/cresa-one:saving-notes` | Save, update, find, and delete private Markdown notes in the default Drive with SaveNote, UpdateNote, GetNotes, and DeleteNote |
 
 `/cresa-one:status` reports bundled versions and helper paths. Claude Code and Cursor also load the `publisher` agent (`cresa-one:publisher`). Cursor loads the publishing rule.
 
@@ -44,13 +46,34 @@ Paths above are relative to the installed plugin directory. Each focused skill f
 
 Core helpers use Bash, curl, and jq. On Windows they run in Git Bash, which Claude Code on Windows already requires. Complete Site preparation requires Python 3.10+ (`python3`, `python`, or `py -3`). Share-card rendering optionally uses Playwright with Chromium; Pillow is the fallback.
 
-Anonymous Sites are temporary. Owner-managed publishing, metadata, access, and Drive operations require a cresa.one account. Installing this plugin also connects the remote MCP server at `https://mcp.cresa.one/mcp` (Streamable HTTP). The first call opens OAuth: an emailed cresa.one code, then read-only or full access. The plugin files contain no API key, token, or client secret. A Drive owner can share one Drive or folder with another agent through a scoped, revocable Drive token. Keep credentials in the client's sign-in store, never in chat. Deletes, access changes, and other sensitive MCP actions still wait for a person to approve them; the core skill's "Remote MCP server" section lists those actions.
+Anonymous Sites are temporary. Owner-managed publishing, metadata, access, and Drive operations require a cresa.one account. Installing this plugin also connects the remote MCP server at `https://mcp.cresa.one/mcp` (Streamable HTTP). The first call opens OAuth: an emailed cresa.one code. The plugin asks for read and write. The consent page lets you grant read-only instead, and a later change asks you to allow writes. The plugin files contain no API key, token, or client secret. Sign-in stores a revocable API key on the account; you never see or paste the secret. A Drive owner can share one Drive or folder with another agent through a scoped, revocable Drive token. Keep credentials in the client's sign-in store, never in chat. Deletes, access changes, and other sensitive MCP actions still wait for a person to approve them; the core skill's "Remote MCP server" section lists those actions.
 
 Skills and the MCP server ship together on Claude Code, Codex, and Cursor. Skills prepare files on the machine (metadata, share cards, dry runs, access checks). The MCP server is the live account: Sites, Drives, and approval-gated changes. Neither replaces the other.
 
+## Permissions
+
+Say these before the first live call. The OAuth consent page shows the same facts. The plugin asks for read and write. The consent page lets you grant read-only instead, and a later change asks you to allow writes.
+
+- **Read.** Read your cresa.one account: Sites, Drives, domains, analytics, viewers, and profile.
+- **Change.** Change your cresa.one account when you allow it: publish, update, and share Sites and Drives. Deletes, access changes, Drive shares, secret variables, and API keys still wait for your approval.
+- **Send.** Send what you publish to cresa.one, which hosts it. The plugin files contain no API key.
+- **Sign-in.** Sign-in is an emailed cresa.one code. Your client stores the connection. You never see or paste the secret.
+
+## Tool permissions
+
+Choose when the agent is allowed to use these tools in Manual mode. In Auto mode, an automated check blocks actions it flags as risky; otherwise, the agent may act without asking, even for tools set to "Needs approval." To have the agent ask in Auto mode too, choose "Always ask" on a tool's row.
+
+Every model-facing tool defaults to ask (`defaultUserPermission`). The generated `tool-permissions.json` lists the section, that default, `taskSupport: forbidden`, and the host line for each tool. App-only tools are hidden from the model.
+
+- **Safety and access.** Can send data to cresa.one.
+- **Capabilities.** In-chat UI.
+- **Sign-in.** Required.
+- **ShowContent.** Loads its code, images, and other files from cresa.one.
+- **manage_files.** Sends data to cresa.one and loads its code from cresa.one.
+
 ## Chat UI
 
-`show_site` returns a Site, or the recent Sites, as structured JSON. Hosts that implement MCP Apps (`ui://` resources, `text/html;profile=mcp-app`) also draw that result as an interactive card with Open, Refresh, and Report. Hosts without MCP Apps still get the JSON. The card is served by `https://mcp.cresa.one/mcp`; the plugin package does not embed a second UI.
+`show_site` returns a Site, or the recent Sites, as structured JSON. Hosts that implement MCP Apps (`ui://` resources, `text/html;profile=mcp-app`) also draw that result as an interactive card with Open, Refresh, and Report. A first run calls `show_site` with `onboarding: true` so the card shows Open my Site, then Update this Site, and later Copy link. Hosts without MCP Apps still get the JSON, and the setup skill gives them the same steps in text. The card is served by `https://mcp.cresa.one/mcp`; the plugin package does not embed a second UI. The Open / Update / Copy buttons appear on the live server after that Worker is deployed. Until then, follow the text steps in the setup skill.
 
 `--privacy private` controls search indexing, referrer policy, and profile listing. Select `--access password` or `--access restricted` when content must be gated. Ship checks protected access before upload and reports the actual expiry returned by the service.
 
@@ -83,7 +106,7 @@ Then run `/mcp` and sign in. Update with `/plugin marketplace update cresa-one`,
 
 ### Codex
 
-Codex reads root `plugin.json` and `mcp.json` in that same folder. The auth block in `mcp.json` is OAuth with dynamic client registration. The manifest does not contain a client id or client secret. Older Codex still reads `.codex-plugin/plugin.json`. That file's `mcpServers` path stays `./.mcp.json`, which is also the Claude HTTP config. Current Codex signs in from `mcp.json`. After install, the `setup` skill is the onboarding skill. `hooks/hooks.json` runs on SessionStart for desktop installs. A package that contains hooks is not eligible for the public OpenAI plugin directory; remove `hooks/` before that submission.
+Codex reads root `plugin.json` and `mcp.json` in that same folder. The auth block in `mcp.json` is OAuth with dynamic client registration. The manifest does not contain a client id or client secret. Older Codex still reads `.codex-plugin/plugin.json`. That file's `mcpServers` path stays `./.mcp.json`, which is also the Claude HTTP config. Current Codex signs in from `mcp.json`. After install, the `setup` skill is the onboarding skill. It states the four permission facts, signs in, publishes one Site, updates that same URL, offers to remember when to use cresa.one, and ends on the link. `hooks/hooks.json` runs on SessionStart for desktop installs. A package that contains hooks is not eligible for the public OpenAI plugin directory; remove `hooks/` before that submission.
 
 ```bash
 codex plugin marketplace add cresadotone/skill
@@ -99,6 +122,18 @@ Cursor reads root `plugin.json` and `mcp.json` for the Agent Plugins shape, and 
 From a checkout, copy `plugins/cresa-one` to `~/.cursor/plugins/local/cresa-one`, then reload Cursor and install it from Customize. The repository root is also a Cursor plugin (`.cursor-plugin/plugin.json`) and a marketplace (`.cursor-plugin/marketplace.json`). Both point at the same package. Sign in when Cursor asks.
 
 The standalone hosted installers (`install.sh`, `install.ps1`) manage a separate skill installation and do not update plugin caches.
+
+### First-run check
+
+From a checkout of this repo, install the local package, start a new chat, and ask: "Walk me through a first Site: publish it, then update the same link."
+
+Before any live call, the agent should say what the connection can read, change, and send. Sign-in is the emailed cresa.one code. The plugin asks for read and write. The consent page lets you grant read-only instead, and a later change asks you to allow writes. The run should publish one Site, update that same URL, ask whether to remember this preference, and end on the link.
+
+- Claude Code: `/plugin marketplace add ./skill`, then `/plugin install cresa-one@cresa-one`. Sign in with `/mcp`.
+- Codex: `codex plugin marketplace add ./skill`, then `codex plugin add cresa-one@cresa-one`. The `setup` skill is the onboarding skill. Start a new task after installing.
+- Cursor: copy `plugins/cresa-one` to `~/.cursor/plugins/local/cresa-one`, reload, and install it from Customize.
+
+The Open / Update / Copy buttons on the Site card ship in the MCP Worker. They show up at `https://mcp.cresa.one/mcp` after `pnpm release` in `cresa-one-mcp`. Until that deploy, the setup skill's text steps are the first run. This repository does not deploy the Worker.
 
 ## Links
 

@@ -1,0 +1,180 @@
+{
+  "manualMode": "Choose when the agent is allowed to use these tools in Manual mode. In Auto mode, an automated check blocks actions it flags as risky; otherwise, the agent may act without asking, even for tools set to \"Needs approval.\" To have the agent ask in Auto mode too, choose \"Always ask\" on a tool's row.",
+  "safety": "Can send data to cresa.one",
+  "capabilities": "In-chat UI",
+  "signIn": "Required",
+  "tools": [
+    {
+      "name": "ShowContent",
+      "section": "Interactive tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": "Loads its code, images, and other files from cresa.one"
+    },
+    {
+      "name": "manage_files",
+      "section": "Interactive tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": "Sends data to cresa.one\nLoads its code, images, and other files from cresa.one"
+    },
+    {
+      "name": "GetNotes",
+      "section": "Read-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "GetSite",
+      "section": "Read-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "get_skills",
+      "section": "Read-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "search_skill_library",
+      "section": "Read-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "CreateSite",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "DeleteNote",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "EditSite",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "SaveNote",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "UpdateNote",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "manage_sites",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "manage_skill",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "submit_feedback",
+      "section": "Write/delete tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": null,
+      "hosts": null
+    },
+    {
+      "name": "complete_upload",
+      "section": "App-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": [
+        "app"
+      ],
+      "hosts": null
+    },
+    {
+      "name": "create_presigned_upload",
+      "section": "App-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": [
+        "app"
+      ],
+      "hosts": null
+    },
+    {
+      "name": "fetch_site_html",
+      "section": "App-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": [
+        "app"
+      ],
+      "hosts": null
+    },
+    {
+      "name": "get_image_gallery",
+      "section": "App-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": [
+        "app"
+      ],
+      "hosts": null
+    },
+    {
+      "name": "inline_edit_site",
+      "section": "App-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": [
+        "app"
+      ],
+      "hosts": null
+    },
+    {
+      "name": "notify_made_with_send_click",
+      "section": "App-only tools",
+      "defaultUserPermission": "ask",
+      "taskSupport": "forbidden",
+      "visibility": [
+        "app"
+      ],
+      "hosts": null
+    }
+  ]
+}

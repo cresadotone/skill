@@ -1,6 +1,6 @@
 {
   "name": "cresa-one",
-  "version": "0.7.0",
+  "version": "0.10.0",
   "description": "Publish Sites with verified access, metadata, and share cards; manage, roll back, health-check, and protect them with lead capture, tracked links, and viewer comments. Store private files in account-owned Drives. Focused skills plus shared helpers and templates. Connects the remote MCP server.",
   "author": {
     "name": "cresa.one",
@@ -40,7 +40,7 @@
     "interface": {
       "displayName": "cresa.one",
       "shortDescription": "Publish Sites and Drives.",
-      "longDescription": "Turn local websites, apps, reports, and files into cresa.one Sites. Prepare HTML metadata and matching Open Graph cards, choose public, password, or restricted access, and verify the resulting Site settings. New protected Sites have access checked before content uploads. Use an offline dry run to review deliverables first.\n\nFocused skills cover publishing; managing existing Sites, including version rollback, viewer comments, and signed webhooks; read-only health checks and viewer lists; access control with passwords, invites, lead capture, tracked recipient links, and gate branding; Drives; self-serve custom domains with automatic HTTPS; and Site Data with proxy routes. They share one bundled runtime of helpers, templates, and reference docs.\n\nStore documents, context, and assets in private account-owned Drives, and share one Drive or folder with another agent through scoped, revocable Drive tokens. The standalone installers (install.sh, and install.ps1 for Windows) also produce portable .skill and .zip archives.\n\nPublishing and Drive operations use the cresa.one API. Anonymous Sites are temporary; owner-managed operations require a cresa.one account. Helpers run in Bash (Git Bash on Windows). Python 3.10+ is required for complete Site preparation. Browser-rendered share cards optionally use Playwright, with a Pillow fallback.\n\nInstalling the plugin connects the remote MCP server at https://mcp.cresa.one/mcp. Sign-in is an emailed cresa.one code. The package contains no API key.",
+      "longDescription": "Turn local websites, apps, reports, and files into cresa.one Sites. Prepare HTML metadata and matching Open Graph cards, choose public, password, or restricted access, and verify the resulting Site settings. New protected Sites have access checked before content uploads. Use an offline dry run to review deliverables first.\n\nFocused skills cover publishing; managing existing Sites, including version rollback, viewer comments, and signed webhooks; read-only health checks and viewer lists; access control with passwords, invites, lead capture, tracked recipient links, and gate branding; Drives; self-serve custom domains with automatic HTTPS; and Site Data with proxy routes. They share one bundled runtime of helpers, templates, and reference docs.\n\nStore documents, context, and assets in private account-owned Drives, and share one Drive or folder with another agent through scoped, revocable Drive tokens. The standalone installers (install.sh, and install.ps1 for Windows) also produce portable .skill and .zip archives.\n\nPublishing and Drive operations use the cresa.one API. Anonymous Sites are temporary; owner-managed operations require a cresa.one account. Helpers run in Bash (Git Bash on Windows). Python 3.10+ is required for complete Site preparation. Browser-rendered share cards optionally use Playwright, with a Pillow fallback.\n\nInstalling the plugin connects the remote MCP server at https://mcp.cresa.one/mcp. Sign-in is an emailed cresa.one code. The package contains no API key. A new install states what the connection can read, change, and send, then publishes one Site and updates that same link.",
       "developerName": "cresa.one",
       "category": "Productivity",
       "capabilities": [
@@ -49,7 +49,8 @@
         "Check Site health",
         "Roll back versions",
         "Capture leads",
-        "Store private files"
+        "Store private files",
+        "Guided first Site"
       ],
       "websiteURL": "https://cresa.one",
       "supportURL": "https://github.com/cresadotone/skill/issues",
@@ -67,7 +68,7 @@
       "defaultPrompt": [
         "Prepare this site for cresa.one with metadata and a share card. Dry run only.",
         "Restrict this Site, add a lead-capture gate, and verify access.",
-        "Check Site health, roll a version back, or store files in a Drive."
+        "Walk me through a first Site: publish it, then update the same link."
       ]
     }
   }
